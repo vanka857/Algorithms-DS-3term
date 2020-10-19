@@ -252,7 +252,7 @@ string SuffixArray::getKOrderedSimilarSubstringsInText1Text2(size_t k) const {
             // где перескок - то, насколько больше общих строк мы нашли на i-м шаге. Перескок = n_of_matched_substring - k
             // А LCP_[i] - количество общих символов текущей и следующей строки (оно может буть больше, чем нам нужно!)
             return {text_.begin() + suffix_array_[i],
-                    text_.begin() + suffix_array_[i] + LCP_[i] + (n_of_matched_substring - k)};
+                    text_.begin() + suffix_array_[i] + LCP_[i] - (n_of_matched_substring - k)};
         }
     }
 
