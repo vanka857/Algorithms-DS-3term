@@ -30,19 +30,19 @@
 #include <cstdint>
 
 std::vector<uint32_t> makePrefixOffline(const std::string & s) {
-    std::vector<uint32_t> pi(s.length());
-    pi[0] = 0;
+    std::vector<uint32_t> prefix(s.length());
+    prefix[0] = 0;
     for (uint32_t i = 1; i < s.length(); ++i) {
-        int j = pi[i - 1];
+        int j = prefix[i - 1];
         while (j > 0 && s[i] != s[j]) {
-            j = pi[j - 1];
+            j = prefix[j - 1];
         }
         if (s[i] == s[j]) {
             ++j;
         }
-        pi[i] = j;
+        prefix[i] = j;
     }
-    return pi;
+    return prefix;
 }
 
 void printTemplateOccurrenceOnline(std::string string_template, std::istream & input_stream, std::ostream & output_stream) {
@@ -55,15 +55,14 @@ void printTemplateOccurrenceOnline(std::string string_template, std::istream & i
     int ch = 0;
 
     while (ch != EOF) {
-        ch = getchar();
-
+        ch = input_stream.get();
         while (j > 0 && ch != string_template[j]) {
             j = template_prefix[j - 1];
         }
         if (ch == string_template[j]) {
             ++j;
             if (j == len) {
-                printf("%d ", i - len);
+                output_stream << (i - len) << " ";
             }
         }
         ++i;
@@ -72,8 +71,13 @@ void printTemplateOccurrenceOnline(std::string string_template, std::istream & i
 
 
 int main() {
+    std::ios::sync_with_stdio(false);
+
     std::string string_template;
     std::cin >> string_template;
+
+//    char temp;
+//    while (std::cin.get(temp) && (temp == ' ' || temp == '\n')) {}
 
     printTemplateOccurrenceOnline(string_template, std::cin, std::cout);
 }
