@@ -5,7 +5,7 @@
 //  слева направо, так и справа налево.
 //  Например, «abba» – палиндром, а «roman» – нет.
 //
-//  Для заданной строки s длины n (1 ≤ n ≤ 105) требуется подсчитать
+//  Для заданной строки s длины n (1 ≤ n ≤ 10^5) требуется подсчитать
 //  число пар (i, j), 1 ≤ i < j ≤ n, таких что подстрока s[i..j]
 //  является палиндромом.
 //
@@ -21,71 +21,51 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <cassert>
 
+template<bool is_even_mode>
+size_t calcPalindroms(const std::string & data) {
+    bool is_uneven_mode = !is_even_mode;
 
-int64_t calcPalindroms(const std::string & data) {
-    int64_t n = data.length();
+    ssize_t n = data.length();
+    std::vector<ssize_t> n_of_palindrom(n);
 
-    std::vector<int64_t> d1(n);
+    ssize_t l = 0, r = -1;
+    ssize_t result = 0;
 
-    int64_t l = 0, r = -1;
-
-    for (int64_t i = 0; i < n; ++i) {
-        int64_t k = 1;
-        if (i <= r) {
-            k = std::min(d1[l + r - i], r - i + 1);
-        }
-        while (i + k < n && i - k >= 0 && data[i + k] == data[i - k]) {
-            ++k;
-        }
-
-        d1[i] = k - 1;
-        
-        if (i + k - 1 > r) {
-            l = i - k + 1;
-            r = i + k - 1;
-        }
-    }
-
-    std::vector<int64_t> d2(n);
-
-    l = 0, r = -1;
-
-    for (int64_t i = 0; i < n; ++i) {
-        int64_t k = 0;
+    for (ssize_t i = 0; i < n; ++i) {
+        ssize_t cur_palindrom_len = is_uneven_mode;
+        //if (r >= 0 && i <= r){ // it is necessary in comparison between int and size_t
         if (i <= r){
-            k = std::min(d2[l+r-i+1], r-i+1);
+            cur_palindrom_len = std::min(n_of_palindrom[l + r - i + is_even_mode], r - i + 1);
         }
-        while (i + k < n && i - k - 1 >= 0 && data[i + k] == data[i - k - 1]) {
-            ++k;
+        while (i + cur_palindrom_len < n && i - cur_palindrom_len - is_even_mode >= 0 &&
+               data[i + cur_palindrom_len] == data[i - cur_palindrom_len - is_even_mode]) {
+            ++cur_palindrom_len;
         }
-        
-        d2[i] = k;
 
-        if (i + k - 1 > r) {
-            l = i - k;
-            r = i + k - 1;
+        n_of_palindrom[i] = cur_palindrom_len - is_uneven_mode;
+        result += n_of_palindrom[i];
+
+        if (i + cur_palindrom_len - 1 > r) {
+            l = i - cur_palindrom_len + is_uneven_mode;
+            r = i + cur_palindrom_len - 1;
         }
-    }
-
-    int64_t result = 0;
-
-    for (auto i : d1) {
-        result += i;
-    }
-    for (auto i : d2) {
-        result += i;
     }
 
     return result;
 }
 
+enum Even{
+    uneven = 0,
+    even = 1
+};
+
 int main() {
     std::string input;
-
     std::cin >> input;
 
-    std::cout << calcPalindroms(input);
+    std::cout << calcPalindroms<uneven>(input) + calcPalindroms<even>(input);
 
     return 0;
 }
