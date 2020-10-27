@@ -79,5 +79,6 @@ int main() {
 //    char temp;
 //    while (std::cin.get(temp) && (temp == ' ' || temp == '\n')) {}
 
+    std::cin.tie(NULL);
     printTemplateOccurrenceOnline(string_template, std::cin, std::cout);
 }
