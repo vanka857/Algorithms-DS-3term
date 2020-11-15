@@ -2,25 +2,24 @@
 #include <string>
 #include <utility>
 #include <vector>
-
-using namespace std;
+#include <optional>
 
 class SuffixArray {
 private:
-    const size_t alphabet_size_ = 256;
+    const size_t ALPHABET_SIZE = 256;
     size_t size_;
-    string text_;
-    vector<int> suffix_array_;
-    vector<int> equivalence_classes_;
-    vector<int> LCP_;
+    std::string text_;
+    std::vector<int> suffix_array_;
+    std::vector<int> equivalence_classes_;
+    std::vector<int> LCP_;
     size_t n_of_classes_ = 0;
 
     size_t n_of_strings_ = 1;
-    vector<size_t> length_of_strings_;
+    std::vector<size_t> length_of_strings_;
 
 public:
-    explicit SuffixArray(string text);
-    SuffixArray(const string & text1, const string & text2) : SuffixArray(text1 + '$' + text2) {
+    explicit SuffixArray(std::string text);
+    SuffixArray(const std::string & text1, const std::string & text2) : SuffixArray(text1 + '$' + text2) {
         n_of_strings_ = 2;
         length_of_strings_.push_back(text1.size() + 1);
         length_of_strings_.push_back(text2.size() + 1);
@@ -28,15 +27,15 @@ public:
 
 private:
     void fillSuffixArray();
-    void sortSuffixArrayFor2PowKSymbols(size_t k);
+
+    void sortByFirst2PowKSymbols(size_t k);
     void buildLCPUsingKasai();
 
 public:
-    size_t calcDifferentSubstrings() const;
-    string getKOrderedSimilarSubstringsInText1Text2(size_t k) const;
+    std::optional<std::string> getKOrderedSimilarSubstringsInText1Text2(size_t k) const;
 };
 
-SuffixArray::SuffixArray(string text) : text_(std::move(text)){
+SuffixArray::SuffixArray(std::string text) : text_(std::move(text)){
     text_ += '#';
     size_ = text_.size();
     suffix_array_.resize(size_);
@@ -49,11 +48,11 @@ SuffixArray::SuffixArray(string text) : text_(std::move(text)){
 void SuffixArray::fillSuffixArray() {
     // Сначала отсортируем подстроки по 0му символу (нумерация с нуля)
 
-    vector<int> counter(alphabet_size_, 0); //  счетчик вхождений сортировки подсчётом
+    std::vector<int> counter(ALPHABET_SIZE, 0); //  счетчик вхождений сортировки подсчётом
     for (auto ch : text_) {
         ++counter[ch];
     }
-    for (size_t i = 1; i < alphabet_size_; ++i) {
+    for (size_t i = 1; i < ALPHABET_SIZE; ++i) {
         counter[i] += counter[i - 1];
     }
     for (size_t i = 0; i < size_; ++i) {
@@ -88,28 +87,23 @@ void SuffixArray::fillSuffixArray() {
             break;
         }
 
-        sortSuffixArrayFor2PowKSymbols(k);
+        sortByFirst2PowKSymbols(k);
     }
 }
-
-void SuffixArray::sortSuffixArrayFor2PowKSymbols(size_t k) {
+void SuffixArray::sortByFirst2PowKSymbols(size_t k) {
     // На этом шаге сортировки выходным результатом будут отсортированные строки длины 2^k символов
 
-    vector<int> suffix_array_1 = suffix_array_;
-    vector<int> equivalence_classes_1(size_);
+    std::vector<int> suffix_array_1(size_);
+    std::vector<int> equivalence_classes_1(size_);
 
     for (size_t i = 0; i < size_; ++i) {
         // сортируем подстроки text_[2^(k - 1) ... 2^k - 1] (нумерация с нуля) и записываем результат в suffix_array_1
         // для этого используем уже отсортированные строки text_[0 ... 2^(k - 1) - 1]
-        suffix_array_1[i] = suffix_array_[i] - k;
-
-        // при необходимости "закольцовываем" подстроки
-        if (suffix_array_1[i] < 0) {
-            suffix_array_1[i] += size_;
-        }
+        // и при необходимости "закольцовываем" подстроки
+        suffix_array_1[i] = (suffix_array_[i] - k + size_) % size_;
     }
     // сортируем подсчётом
-    vector<int> counter(n_of_classes_, 0);
+    std::vector<int> counter(n_of_classes_, 0);
     for (size_t i = 0; i < size_; ++i) {
         ++counter[equivalence_classes_[suffix_array_1[i]]];
     }
@@ -145,13 +139,12 @@ void SuffixArray::sortSuffixArrayFor2PowKSymbols(size_t k) {
 
     // Сохраняем новый классы эквивалентности подстрок
 
-    equivalence_classes_ = equivalence_classes_1;
+    equivalence_classes_ = std::move(equivalence_classes_1);
 }
-
 void SuffixArray::buildLCPUsingKasai() {
     // Алгоритм Касаи и его друзей построения LCP
     LCP_.resize(size_ - 1);
-    vector<int> position(size_);
+    std::vector<int> position(size_);
 
     // строим симметричный суффиксному массиву массив для удобства
     for (size_t i = 0; i < size_; ++i) {
@@ -178,7 +171,7 @@ void SuffixArray::buildLCPUsingKasai() {
             size_t j = suffix_array_[position[i] + 1];
 
             // И найдём в них количество повторяющихся символов
-            while (max(i + n_of_similar_symbols, j + n_of_similar_symbols) < size_ - 1
+            while (std::max(i + n_of_similar_symbols, j + n_of_similar_symbols) < size_
                    && text_[i + n_of_similar_symbols] == text_[j + n_of_similar_symbols]) {
                 ++n_of_similar_symbols;
             }
@@ -189,27 +182,9 @@ void SuffixArray::buildLCPUsingKasai() {
 
 }
 
-size_t SuffixArray::calcDifferentSubstrings() const {
-
-    // Вспомним, что мы добавили к нашей строке '$', и вычтем 1 из размера строки для удобства расчета
-    size_t size = size_ - 1;
-
-    // Если бы все подстроки априори бы ли бы различными, то их число просто выражалось бы такой формулой
-    size_t result = (size + 1) * size / 2;
-
-    // Но так как подстроки могут быть префиксами друг друга, учтем количество повторений подстрок,
-    // то есть количество совпадающих символов для каждой подстроки.
-    // Для этого вычтем из результата сумму всего LCP
-    for (size_t i = 0; i < size; ++i) {
-        result -= LCP_[i];
-    }
-
-    return result;
-}
-
-string SuffixArray::getKOrderedSimilarSubstringsInText1Text2(size_t k) const {
+std::optional<std::string> SuffixArray::getKOrderedSimilarSubstringsInText1Text2(size_t k) const {
     if (n_of_strings_ != 2) {
-        return "-1";
+        return { };
     }
 
     size_t index_of_string_splitter = length_of_strings_[0] - 1; // место, с которого начинается вторая строка
@@ -251,45 +226,41 @@ string SuffixArray::getKOrderedSimilarSubstringsInText1Text2(size_t k) const {
             // Тогда выведем строку text_[j ... j + LCP_[i] - перескок], 
             // где перескок - то, насколько больше общих строк мы нашли на i-м шаге. Перескок = n_of_matched_substring - k
             // А LCP_[i] - количество общих символов текущей и следующей строки (оно может буть больше, чем нам нужно!)
-            return {text_.begin() + suffix_array_[i],
-                    text_.begin() + suffix_array_[i] + LCP_[i] - (n_of_matched_substring - k)};
+            return {std::string(text_.begin() + suffix_array_[i],
+                    text_.begin() + suffix_array_[i] + LCP_[i] - (n_of_matched_substring - k))};
         }
     }
 
-    return "-1";
+    return { };
 }
-
-//#define DEBUG
 
 
 int main() {
-    string text1, text2;
+    std::string text1, text2;
     size_t k;
 
-#ifndef DEBUG
-    cin >> text1 >> text2 >> k;
+    std::cin >> text1 >> text2 >> k;
 
     SuffixArray suffix_array(text1, text2);
-    cout << suffix_array.getKOrderedSimilarSubstringsInText1Text2(k);
-#else
-    vector<vector<string> > data = {
-            {"aaa", "abaa", "3", "-1"},
-            {"aaa", "aaa", "1", "a"},
-            {"aaa", "aaa", "2", "aa"},
-            {"aaa", "aaa", "3", "aaa"},
-            {"a", "a", "1", "a"},
-    };
-
-    size_t i = 1;
-    for (const auto & test : data) {
-        SuffixArray suffix_array(test[0], test[1]);
-        auto got = suffix_array.getKOrderedSimilarSubstringsInText1Text2(stoi(test[2]));
-        if (got != test[3]) {
-            cout << "FAILED TEST" << i << " expected: " << test[3] << " got: " << got << endl;
-        }
-        ++i;
-    }
-#endif
+    std::cout << suffix_array.getKOrderedSimilarSubstringsInText1Text2(k).value_or("-1");
 
     return 0;
 }
+
+//vector<vector<string> > data = {
+//        {"aaa", "abaa", "3", "-1"},
+//        {"aaa", "aaa", "1", "a"},
+//        {"aaa", "aaa", "2", "aa"},
+//        {"aaa", "aaa", "3", "aaa"},
+//        {"a", "a", "1", "a"},
+//};
+//
+//size_t i = 1;
+//for (const auto & test : data) {
+//SuffixArray suffix_array(test[0], test[1]);
+//auto got = suffix_array.getKOrderedSimilarSubstringsInText1Text2(stoi(test[2]));
+//if (got != test[3]) {
+//cout << "FAILED TEST" << i << " expected: " << test[3] << " got: " << got << endl;
+//}
+//++i;
+//}
