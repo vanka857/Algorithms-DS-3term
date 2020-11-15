@@ -3,28 +3,27 @@
 #include <utility>
 #include <vector>
 
-using namespace std;
-
 class SuffixArray {
 private:
-    const size_t alphabet_size_ = 256;
+    const size_t ALPHABET_SIZE = 256;
     size_t size_;
-    string text_;
-    vector<int> suffix_array_;
-    vector<int> equivalence_classes_;
-    vector<int> LCP_;
+    std::string text_;
+    std::vector<int> suffix_array_;
+    std::vector<int> equivalence_classes_;
+    std::vector<int> LCP_;
     size_t n_of_classes_ = 0;
 
-public:
-    explicit SuffixArray(string text);
     void fillSuffixArray();
 
-    void sortSuffixArrayFor2PowKSymbols(size_t k);
+    void sortByFirst2PowKSymbols(size_t k);
     void buildLCPUsingKasai();
+
+public:
+    explicit SuffixArray(std::string text);
     size_t calcDifferentSubstrings();
 };
 
-SuffixArray::SuffixArray(string text) : text_(std::move(text)){
+SuffixArray::SuffixArray(std::string text) : text_(std::move(text)){
     text_ += '$';
     size_ = text_.size();
     suffix_array_.resize(size_);
@@ -36,11 +35,11 @@ SuffixArray::SuffixArray(string text) : text_(std::move(text)){
 void SuffixArray::fillSuffixArray() {
     // Сначала отсортируем подстроки по 0му символу (нумерация с нуля)
 
-    vector<int> counter(alphabet_size_, 0); //  счетчик вхождений сортировки подсчётом
+    std::vector<int> counter(ALPHABET_SIZE, 0); //  счетчик вхождений сортировки подсчётом
     for (auto ch : text_) {
         ++counter[ch];
     }
-    for (size_t i = 1; i < alphabet_size_; ++i) {
+    for (size_t i = 1; i < ALPHABET_SIZE; ++i) {
         counter[i] += counter[i - 1];
     }
     for (size_t i = 0; i < size_; ++i) {
@@ -75,28 +74,24 @@ void SuffixArray::fillSuffixArray() {
             break;
         }
 
-        sortSuffixArrayFor2PowKSymbols(k);
+        sortByFirst2PowKSymbols(k);
     }
 }
 
-void SuffixArray::sortSuffixArrayFor2PowKSymbols(size_t k) {
+void SuffixArray::sortByFirst2PowKSymbols(size_t k) {
     // На этом шаге сортировки выходным результатом будут отсортированные строки длины 2^k символов
 
-    vector<int> suffix_array_1 = suffix_array_;
-    vector<int> equivalence_classes_1(size_);
+    std::vector<int> suffix_array_1(size_);
+    std::vector<int> equivalence_classes_1(size_);
 
     for (size_t i = 0; i < size_; ++i) {
         // сортируем подстроки text_[2^(k - 1) ... 2^k - 1] (нумерация с нуля) и записываем результат в suffix_array_1
         // для этого используем уже отсортированные строки text_[0 ... 2^(k - 1) - 1]
-        suffix_array_1[i] = suffix_array_[i] - k;
-
-        // при необходимости "закольцовываем" подстроки
-        if (suffix_array_1[i] < 0) {
-            suffix_array_1[i] += size_;
-        }
+        // и при необходимости "закольцовываем" подстроки
+        suffix_array_1[i] = (suffix_array_[i] - k + size_) % size_;
     }
     // сортируем подсчётом
-    vector<int> counter(n_of_classes_, 0);
+    std::vector<int> counter(n_of_classes_, 0);
     for (size_t i = 0; i < size_; ++i) {
         ++counter[equivalence_classes_[suffix_array_1[i]]];
     }
@@ -132,13 +127,13 @@ void SuffixArray::sortSuffixArrayFor2PowKSymbols(size_t k) {
 
     // Сохраняем новый классы эквивалентности подстрок
 
-    equivalence_classes_ = equivalence_classes_1;
+    equivalence_classes_ = std::move(equivalence_classes_1);
 }
 
 void SuffixArray::buildLCPUsingKasai() {
     // Алгоритм Касаи и его друзей построения LCP
     LCP_.resize(size_ - 1);
-    vector<int> position(size_);
+    std::vector<int> position(size_);
 
     // строим симметричный суффиксному массиву массив для удобства
     for (size_t i = 0; i < size_; ++i) {
@@ -165,7 +160,7 @@ void SuffixArray::buildLCPUsingKasai() {
             size_t j = suffix_array_[position[i] + 1];
 
             // И найдём в них количество повторяющихся символов
-            while (max(i + n_of_similar_symbols, j + n_of_similar_symbols) < size_
+            while (std::max(i + n_of_similar_symbols, j + n_of_similar_symbols) < size_
                    && text_[i + n_of_similar_symbols] == text_[j + n_of_similar_symbols]) {
                 ++n_of_similar_symbols;
             }
@@ -199,11 +194,11 @@ size_t SuffixArray::calcDifferentSubstrings() {
 
 
 int main() {
-    string text;
-    cin >> text;
+    std::string text;
+    std::cin >> text;
 
     SuffixArray suffix_array(text);
-    cout << suffix_array.calcDifferentSubstrings();
+    std::cout << suffix_array.calcDifferentSubstrings();
 
     return 0;
 }
