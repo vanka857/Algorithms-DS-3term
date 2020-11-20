@@ -1,6 +1,7 @@
 #include <iostream>
 #include <algorithm>
 #include <vector>
+#include <cmath>
 
 enum class orientation {
     L,
@@ -9,7 +10,20 @@ enum class orientation {
 };
 
 template<typename T>
+bool is_equal(const T & x, const T & y) {
+    return x == y;
+}
+bool is_equal(double x, double y) {
+    return std::fabs(x - y) < std::numeric_limits<double>::epsilon();
+}
+
+template <typename T>
+bool is_less_equal(const T & x, const T & y) {
+    return is_equal(x, y) || x < y;
+}
+template<typename T>
 class Point {
+    // TODO make x, y private, make getter, setter, etc...
 public:
     T x;
     T y;
@@ -22,9 +36,10 @@ public:
     Point & operator-=(const Point & rhs);
     Point operator-() const;
 
+    [[nodiscard]] std::string toString() const;
+
     [[nodiscard]] double len() const;
 };
-
 template<typename T>
 struct xLess_yGreater{
     bool operator()(Point<T> a, Point<T> b) const {
@@ -38,63 +53,96 @@ struct xLess_yGreater{
 } ;
 
 template<typename T>
-class Vector {
-private:
-    Point<T> begin;
-    Point<T> end;
-
-public:
-    Vector(const Point<T> & beg, const Point<T> & end): begin(beg), end(end) {}
-
-    T x() const;
-    T y() const;
-};
-
-template<typename T>
-T Vector<T>::x() const {
-    return end.x - begin.x;
-}
-
-template<typename T>
-T Vector<T>::y() const {
-    return end.y - begin.y;
-}
+struct xLess_yLess{
+    bool operator()(Point<T> a, Point<T> b) const {
+        if(a.x < b.x) {
+            return true;
+        } else if (a.x == b.x) {
+            return a.y < b.y;
+        }
+        return false;
+    }
+} ;
 
 template<typename T>
 Point<T> & Point<T>::operator+=(const Point & rhs) {
     this->x += rhs.x;
     this->y += rhs.y;
-    return this;
+    return *this;
 }
-
 template<typename T>
 Point<T> & Point<T>::operator-=(const Point & rhs) {
     this->x -= rhs.x;
     this->y -= rhs.y;
     return *this;
 }
-
 template<typename T>
 Point<T> Point<T>::operator-() const{
     return {-this->x, -this->y};
 }
-
 template<typename T>
 double Point<T>::len() const {
     return sqrt(x * x + y * y);
 }
 
 template<typename T>
+std::string Point<T>::toString() const {
+    return "x:" + std::to_string(this->x) + " y:" + std::to_string(this->y);
+}
+template<typename T>
 Point<T> operator+(Point<T> lhs, const Point<T> & rhs) {
     lhs += rhs;
     return lhs;
 }
-
 template<typename T>
 Point<T> operator-(Point<T> lhs, const Point<T> & rhs) {
     lhs -= rhs;
     return lhs;
 }
+
+template<typename T>
+class Vector {
+    // TODO make begin, end private ?
+public:
+    Point<T> begin;
+    Point<T> end;
+
+public:
+    explicit Vector(const Point<T> & point): begin({0, 0}), end(point) {}
+    Vector(const Point<T> & beg, const Point<T> & end): begin(beg), end(end) {}
+
+    Vector operator - () const;
+
+    T x() const;
+    T y() const;
+};
+
+template<typename T>
+Vector<T> Vector<T>::operator-() const {
+    return {this->end, this->begin};
+}
+template<typename T>
+T Vector<T>::x() const {
+    return end.x - begin.x;
+}
+template<typename T>
+T Vector<T>::y() const {
+    return end.y - begin.y;
+}
+
+template<typename T>
+Vector<T> operator + (const Vector<T> & lhs, const Vector<T> & rhs) {
+    return {lhs.begin, {lhs.x() + rhs.x(), lhs.y() + rhs.y()}};
+}
+template<typename T>
+Vector<T> operator - (const Vector<T> & lhs, const Vector<T> & rhs) {
+    return lhs + -rhs;
+}
+template<typename T, typename D>
+Vector<T> operator * (const Vector<T> & lhs, D factor) {
+    return {{lhs.begin.x * factor, lhs.begin.y * factor}, {lhs.end.x * factor, lhs.end.y * factor}};
+}
+
 
 template<typename T>
 bool intersects(const Point<T> & a1, const Point<T> & a2, const Point<T> & b1, const Point<T> & b2);
@@ -125,11 +173,11 @@ bool intersects(const Point<T> & a1, const Point<T> & a2, const Point<T> & b1, c
         return true;
     }
 
-    if (crPr1 == 0 && (belongsToParallel(a1, b1, b2) || belongsToParallel(a2, b1, b2))) {
+    if (is_equal(crPr1, static_cast<T>(0)) && (belongsToParallel(a1, b1, b2) || belongsToParallel(a2, b1, b2))) {
         return true;
     }
 
-    if (crPr2 == 0 && (belongsToParallel(b1, a1, a2) || belongsToParallel(b2, a1, a2))) {
+    if (is_equal(crPr2, static_cast<T>(0)) && (belongsToParallel(b1, a1, a2) || belongsToParallel(b2, a1, a2))) {
         return true;
     }
 
@@ -137,15 +185,15 @@ bool intersects(const Point<T> & a1, const Point<T> & a2, const Point<T> & b1, c
 }
 
 template<typename T>
-bool belongsToParallel(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
+inline bool belongsToParallel(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
     // states that p1 belongs to (p2; p3) (line)
     // return true if p1 belongs to [p2; p3] (line segment).
 
-    return crossProduct<T>({p1, p2}, {p1, p3}) == 0 && dotProduct<T>({p1, p2}, {p1, p3}) <= 0;
+    return is_equal(crossProduct<T>({p1, p2}, {p1, p3}), static_cast<T>(0)) && is_less_equal(dotProduct<T>({p1, p2}, {p1, p3}), static_cast<T>(0));
 }
 
 template<typename T>
-T crossProduct(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
+inline T crossProduct(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
     // (1, 2) - first vector, (1, 3) - second
     Point a = p2 - p1;
     Point b = p3 - p1;
@@ -153,12 +201,12 @@ T crossProduct(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
 }
 
 template<typename T>
-T crossProduct(const Vector<T> & v1, const Vector<T> & v2) {
+inline T crossProduct(const Vector<T> & v1, const Vector<T> & v2) {
     return v1.x() * v2.y() - v1.y() * v2.x();
 }
 
 template<typename T>
-T dotProduct(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
+inline T dotProduct(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
     // (1, 2) - first vector, (1, 3) - second
     Point a = p2 - p1;
     Point b = p3 - p1;
@@ -166,7 +214,7 @@ T dotProduct(const Point<T> & p1, const Point<T> & p2, const Point<T> & p3) {
 }
 
 template<typename T>
-T dotProduct(const Vector<T> & v1, const Vector<T> & v2) {
+inline T dotProduct(const Vector<T> & v1, const Vector<T> & v2) {
     return v1.x() * v2.x() + v1.y() * v2.y();
 }
 
@@ -184,7 +232,7 @@ public:
     typename Container::iterator begin, end;
 
     explicit ConvexHullClass(typename Container::iterator begin, typename Container::iterator end) :
-        begin(begin), end(end) {
+            begin(begin), end(end) {
         // TODO check iterator tag >= bidirectional
 
         std::sort(begin, end, xLess_yGreater<T>());
@@ -192,6 +240,7 @@ public:
     std::vector<Point<T>> createConvexHull();
 
 private:
+    // TODO return Polygon instead of vector<Point>
     template <typename Iterator>
     std::vector<Point<T>> createConvexHullOfSorted(Iterator begin_, Iterator end_);
 };
@@ -237,4 +286,190 @@ std::vector<Point<T>> ConvexHullClass<Container, T>::createConvexHullOfSorted(It
     }
 
     return result;
+}
+
+template<typename T>
+class Shape {
+public:
+    virtual ~Shape() = default;
+
+    virtual bool containsPoint(const Point<T> & point) const = 0;
+
+    virtual void reflex(const Point<T> & center) = 0;
+};
+
+
+template <typename T>
+class Polygon : public Shape<T> {
+protected:
+    std::vector<Point<T>> vertices;
+    Polygon() = default;
+    void setVertices(const std::vector<Point<T>> & vertices);
+
+    bool reflected = false;
+
+public:
+    explicit Polygon(const std::vector<Point<T>> & vertices);
+    explicit Polygon(const std::vector<Vector<T>> & edges);
+    template <typename  ...Points>
+    explicit Polygon(Points... points);
+
+    [[nodiscard]] size_t verticesCount() const;
+    std::vector<Point<T>> getVertices() const;
+    std::vector<Vector<T>> getEdges() const;
+
+    void move(const Vector<T> & shift);
+
+    void update_min();
+
+    [[nodiscard]] bool is_reflected() const { return reflected; }
+
+    void print() const;
+    [[nodiscard]] std::string toString() const;
+
+    bool containsPoint(const Point<T> & point) const override;
+
+    void reflex(const Point<T> & center) override;
+};
+
+template <typename  T>
+Polygon<T>::Polygon(const std::vector<Point<T>> & vertices) {
+    this->vertices = vertices;
+    update_min();
+}
+template <typename  T>
+template <typename  ...Points>
+Polygon<T>::Polygon(Points... points) : Polygon(std::vector<Point<T>>({static_cast<Point<double>>(points)...})) {}
+
+template<typename T>
+Polygon<T>::Polygon(const std::vector<Vector<T>> & edges) {
+    vertices.push_back({0, 0});
+
+    for (size_t i = 0; i < edges.size() - 1; ++i) {
+        auto temp = Vector(vertices[i]) + edges[i];
+        vertices.emplace_back(temp.x(), temp.y());
+    }
+
+    update_min();
+}
+
+template<typename T>
+void Polygon<T>::move(const Vector<T> & shift) {
+    for(auto & vertex : vertices) {
+        vertex += {shift.x(), shift.y()};
+    }
+}
+
+template<typename T>
+void Polygon<T>::update_min() {
+
+    Point<T> minPoint(std::numeric_limits<T>::max(), std::numeric_limits<T>::min());
+    typename std::vector<Point<T>>::iterator min_pos;
+
+    for (size_t i = 0; i < verticesCount(); ++i) {
+        auto & point = vertices[i];
+        auto cmp = xLess_yLess<T>();
+
+        if (cmp(point, minPoint)) {
+
+            minPoint = point;
+            min_pos = vertices.begin() + i;
+        }
+    }
+
+    std::vector<Point<T>> vertices1(min_pos, vertices.end());
+    std::move(vertices.begin(), min_pos, std::back_inserter(vertices1));
+
+    vertices = vertices1;
+}
+
+template <typename  T>
+inline size_t Polygon<T>::verticesCount() const {
+    return vertices.size();
+}
+template <typename  T>
+std::vector<Point<T>> Polygon<T>::getVertices() const {
+    return vertices;
+}
+template<typename T>
+std::vector<Vector<T>> Polygon<T>::getEdges() const {
+    std::vector<Vector<T>> result;
+    result.reserve(verticesCount());
+
+    for (size_t i = 1; i < verticesCount(); ++i) {
+        result.emplace_back(vertices[i - 1], vertices[i]);
+    }
+
+    result.emplace_back(*(vertices.end() - 1), vertices[0]);
+
+    return result;
+}
+
+template <typename  T>
+bool Polygon<T>::containsPoint(const Point<T> & point) const{
+    const auto & edges = getEdges();
+
+    for (const auto & edge : edges) {
+        if (crossProduct(point, edge.begin, edge.end) > 0) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+template<typename T>
+Polygon<T> operator + (const Polygon<T> lhs, const Polygon<T> rhs) {
+    // TODO check if vertices (and edges) in lhs, rhs sorted
+    auto e_lhs = lhs.getEdges();
+    auto e_rhs = rhs.getEdges();
+
+    std::vector<Vector<T>> sorted_edges;
+
+    auto less_ = [](Vector<T> lhs, Vector<T> rhs){
+        return crossProduct(lhs, rhs) < 0;
+    };
+
+    std::merge(e_lhs.begin(), e_lhs.end(), e_rhs.begin(), e_rhs.end(), std::back_inserter(sorted_edges), less_);
+
+    Polygon raw(sorted_edges);
+    raw.move(Vector(e_lhs[0].begin) + Vector(e_rhs[0].begin));
+
+    return raw;
+}
+
+template <typename T>
+void reflexPoints(std::vector<Point<T>> & vertices, const Point<T> & center) {
+    for (auto & p : vertices) {
+        auto temp = Vector<T>(center) * 2 - Vector<T>(p);
+        p.x = temp.x();
+        p.y = temp.y();
+    }
+}
+
+template <typename T>
+void Polygon<T>::reflex(const Point<T> & center) {
+    reflexPoints(vertices, center);
+    reflected = !reflected;
+    update_min();
+}
+
+template <typename T>
+void Polygon<T>::print() const {
+    // TODO print in parameter istream
+    std::cout << this->toString() << std::endl;
+}
+
+template <typename T>
+std::string Polygon<T>::toString() const {
+    std::string result;
+    for (auto const & p : this->vertices) {
+        result += "[" + p.toString() + "] ";
+    }
+    return result;
+}
+
+template <typename T>
+void Polygon<T>::setVertices(const std::vector<Point<T>> & vertices_) {
+    Polygon::vertices = vertices_;
 }
