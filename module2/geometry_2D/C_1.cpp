@@ -56,6 +56,10 @@ int main() {
         }
 
         ConvexHull3DClass cch(points);
+        // TODO выводить в ответ неиспорченные поворотом грани (из исходного неизмененного вектора)
+        // TODO научиться приинмать точки integer (создавать копию в double для поворота)
+
+        // TODO переписать на unique_ptr, shared_ptr
         auto ch = cch.hull();
 
         std::sort(ch.begin(), ch.end(), [](Face<T> & lhs, Face<T> & rhs){
