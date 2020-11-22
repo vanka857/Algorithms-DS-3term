@@ -100,10 +100,23 @@ void Face<T>::getLessOrder() {
 
 template<typename T>
 class ConvexHull3DClass {
+private:
     std::vector<Vertex<T> > points;
+
 public:
+    static bool xLess_zGreater(Point3D<T> lhs, Point3D<T> rhs) {
+        return lhs.x < rhs.x || (lhs.x == rhs.x && lhs.z > rhs.z);
+    }
+
+    static bool zLess_xGreater(Point3D<T> lhs, Point3D<T> rhs) {
+        return lhs.z < rhs.z || (lhs.z == rhs.z && lhs.x > rhs.x);
+    }
+
     explicit ConvexHull3DClass(const std::vector<Vertex<T> > & points) : points(points) {}
-    std::vector<Face<T>> hull(); // return ConvexHull as faces
+    std::vector<Face<T>> hull() const; // return ConvexHull as faces
+
+    std::vector<Face<T>> lowerHull(std::function<bool (Vertex<T>, Vertex<T>)> less = xLess_zGreater) const; // return Lower ConvexHull as faces
+    std::vector<Face<T>> upperHull(std::function<bool (Vertex<T>, Vertex<T>)> less = xLess_zGreater) const; // return Upper ConvexHull as faces
 
 private:
 
@@ -116,13 +129,13 @@ private:
         RIGHT_BRIDGE_NEXT,
     };
 
-    void sortPoints();
-    static std::vector<Vertex<T> > reflected(typename std::vector<Vertex<T> *>::iterator begin, typename std::vector<Vertex<T> *>::iterator end) {
+    void sortPoints(std::vector<Vertex<T>> & source, std::function<bool (Vertex<T>, Vertex<T>)> less) const;
+    static std::vector<Vertex<T> > reflected(typename std::vector<Vertex<T>>::iterator begin, typename std::vector<Vertex<T>>::iterator end) {
         std::vector<Vertex<T> > result;
 
         for (auto it = begin; it < end; ++it) {
-            auto * pt = *it;
-            Vertex<T> v(pt->x, pt->y, - pt->z, pt->id);
+            auto pt = *it;
+            Vertex<T> v(pt.x, pt.y, - pt.z, pt.id);
             v.prev = nullptr;
             v.next = nullptr;
             result.push_back(v);
@@ -181,24 +194,69 @@ std::vector<Vertex<T> *> ConvexHull3DClass<T>::links(const std::vector<Vertex<T>
 }
 
 template<typename T>
-std::vector<Face<T>> ConvexHull3DClass<T>::hull() {
+std::vector<Face<T>> ConvexHull3DClass<T>::lowerHull(std::function<bool (Vertex<T>, Vertex<T>)> less) const {
     std::vector<Face<T>> result;
 
-    sortPoints();
+    auto sorted = points;
+    sortPoints(sorted, less);
 
-    auto points_links = links(points);
-    auto lch = hull_raw(points_links, 0, points_links.size());
+    auto sorted_links = links(sorted);
+    auto lch = hull_raw(sorted_links, 0, sorted_links.size());
     // add faces from lch (lower convex hull)
-    pushFaces(result, lch);
+    pushFaces(result, lch, false);
 
-    points = reflected(points_links.begin(), points_links.end());
+    return result;
+}
 
-    auto reflected_links = links(points);
+template<typename T>
+std::vector<Face<T>> ConvexHull3DClass<T>::upperHull(std::function<bool (Vertex<T>, Vertex<T>)> less) const {
+    std::vector<Face<T>> result;
+
+    auto sorted = points;
+    sortPoints(sorted, less);
+
+    auto points_reflected = reflected(sorted.begin(), sorted.end());
+
+    auto reflected_links = links(points_reflected);
     auto uch = hull_raw(reflected_links, 0, reflected_links.size());
     // add faces from uch (upper convex hull)
     pushFaces(result, uch, true);
 
     return result;
+}
+
+template<typename T>
+std::vector<Face<T>> ConvexHull3DClass<T>::hull() const {
+    auto lch = lowerHull();
+    auto uch = upperHull();
+
+    std::move(uch.begin(), uch.end(), std::back_inserter(lch));
+
+    return lch;
+}
+
+
+template<typename T>
+void ConvexHull3DClass<T>::sortPoints(std::vector<Vertex<T>> & source, std::function<bool (Vertex<T>, Vertex<T>)> less) const {
+    std::sort(source.begin(), source.end(), less);
+}
+
+template<typename T>
+std::vector<Vertex<T> *>
+ConvexHull3DClass<T>::hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size_t to) {
+
+    if (from + 1 == to) { // n == 1
+        std::vector<Vertex<T> *> result;
+        result.emplace_back(pts[from]);
+        return result;
+    }
+
+    size_t mid = from + static_cast<int>((to - from) / 2);
+
+    auto r1 = hull_raw(pts, from, mid);
+    auto r2 = hull_raw(pts, mid, to);
+
+    return  merge(r1, r2, pts[mid - 1], pts[mid]);
 }
 
 template <typename T>
@@ -227,6 +285,25 @@ bool ConvexHull3DClass<T>::isRightTurn(Vertex<T> * a, Vertex<T> * b, Vertex<T> *
 
     return is_less_equal(crossProduct(ab_y, bc_y), static_cast<T>(0));
 }
+
+template<typename T>
+std::pair<Vertex<T> *, Vertex<T> *>
+ConvexHull3DClass<T>::findBridge(Vertex<T> * left_br,
+                                 Vertex<T> * right_br) {
+
+    while (true) {
+        if (isRightTurn(left_br, right_br, right_br->next)) {
+            right_br = right_br->next;
+        } else if (isRightTurn(left_br->prev, left_br, right_br)) {
+            left_br = left_br->prev;
+        } else {
+            break;
+        }
+    }
+
+    return {left_br, right_br};
+}
+
 template<typename T>
 std::vector<Vertex<T> *>
 ConvexHull3DClass<T>::merge(const std::vector<Vertex<T> *> & left,
@@ -331,6 +408,7 @@ void ConvexHull3DClass<T>::buildBridges(std::vector<Vertex<T> *> & data,
     right_br->prev = left_br;
 
     for (auto cur = data.rbegin(); cur != data.rend(); ++cur) {
+        // TODO may be cur_point = *cur is same
         auto cur_point = &*(*cur);
 
         if (left_br->x < cur_point->x && cur_point->x < right_br->x) {
@@ -355,49 +433,4 @@ void ConvexHull3DClass<T>::buildBridges(std::vector<Vertex<T> *> & data,
             }
         }
     }
-}
-
-template<typename T>
-void ConvexHull3DClass<T>::sortPoints() {
-    auto cmp = [](Point3D<T> lhs, Point3D<T> rhs){
-        return lhs.x < rhs.x || (lhs.x == rhs.x && lhs.z > rhs.z);
-    };
-
-    std::sort(points.begin(), points.end(), cmp);
-}
-
-template<typename T>
-std::vector<Vertex<T> *>
-ConvexHull3DClass<T>::hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size_t to) {
-
-    if (from + 1 == to) { // n == 1
-        std::vector<Vertex<T> *> result;
-        result.emplace_back(pts[from]);
-        return result;
-    }
-
-    size_t mid = from + static_cast<int>((to - from) / 2);
-
-    auto r1 = hull_raw(pts, from, mid);
-    auto r2 = hull_raw(pts, mid, to);
-
-    return  merge(r1, r2, pts[mid - 1], pts[mid]);
-}
-
-template<typename T>
-std::pair<Vertex<T> *, Vertex<T> *>
-ConvexHull3DClass<T>::findBridge(Vertex<T> * left_br,
-                                 Vertex<T> * right_br) {
-
-    while (true) {
-        if (isRightTurn(left_br, right_br, right_br->next)) {
-            right_br = right_br->next;
-        } else if (isRightTurn(left_br->prev, left_br, right_br)) {
-            left_br = left_br->prev;
-        } else {
-            break;
-        }
-    }
-
-    return {left_br, right_br};
 }
