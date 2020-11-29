@@ -32,7 +32,7 @@ private:
     void buildLCPUsingKasai();
 
 public:
-    std::optional<std::string> getKOrderedSimilarSubstringsInText1Text2(size_t k) const;
+    [[nodiscard]] std::optional<std::string> orderedCommonSubstring(size_t order_len) const;
 };
 
 SuffixArray::SuffixArray(std::string text) : text_(std::move(text)){
@@ -182,7 +182,7 @@ void SuffixArray::buildLCPUsingKasai() {
 
 }
 
-std::optional<std::string> SuffixArray::getKOrderedSimilarSubstringsInText1Text2(size_t k) const {
+std::optional<std::string> SuffixArray::orderedCommonSubstring(size_t order_len) const {
     if (n_of_strings_ != 2) {
         return { };
     }
@@ -220,14 +220,14 @@ std::optional<std::string> SuffixArray::getKOrderedSimilarSubstringsInText1Text2
         // Заметим, что находить общие подстроки мы будем в лексикогрфическом порядке, т.к. мы ищем их в
         // суффиксном массиве, который уже отсортирован
 
-        // Если это k-я по счету общая подстрока, выходим
-        if (n_of_matched_substring >= k) {
-            // Может оказаться так, что на очередном шаге мы нашли больше, чем нужно общих строк (n_of_matched_substring > k)
+        // Если это order_len-я по счету общая подстрока, выходим
+        if (n_of_matched_substring >= order_len) {
+            // Может оказаться так, что на очередном шаге мы нашли больше, чем нужно общих строк (n_of_matched_substring > order_len)
             // Тогда выведем строку text_[j ... j + LCP_[i] - перескок], 
-            // где перескок - то, насколько больше общих строк мы нашли на i-м шаге. Перескок = n_of_matched_substring - k
+            // где перескок - то, насколько больше общих строк мы нашли на i-м шаге. Перескок = n_of_matched_substring - order_len
             // А LCP_[i] - количество общих символов текущей и следующей строки (оно может буть больше, чем нам нужно!)
             return {std::string(text_.begin() + suffix_array_[i],
-                    text_.begin() + suffix_array_[i] + LCP_[i] - (n_of_matched_substring - k))};
+                    text_.begin() + suffix_array_[i] + LCP_[i] - (n_of_matched_substring - order_len))};
         }
     }
 
@@ -242,25 +242,7 @@ int main() {
     std::cin >> text1 >> text2 >> k;
 
     SuffixArray suffix_array(text1, text2);
-    std::cout << suffix_array.getKOrderedSimilarSubstringsInText1Text2(k).value_or("-1");
+    std::cout << suffix_array.orderedCommonSubstring(k).value_or("-1");
 
     return 0;
 }
-
-//vector<vector<string> > data = {
-//        {"aaa", "abaa", "3", "-1"},
-//        {"aaa", "aaa", "1", "a"},
-//        {"aaa", "aaa", "2", "aa"},
-//        {"aaa", "aaa", "3", "aaa"},
-//        {"a", "a", "1", "a"},
-//};
-//
-//size_t i = 1;
-//for (const auto & test : data) {
-//SuffixArray suffix_array(test[0], test[1]);
-//auto got = suffix_array.getKOrderedSimilarSubstringsInText1Text2(stoi(test[2]));
-//if (got != test[3]) {
-//cout << "FAILED TEST" << i << " expected: " << test[3] << " got: " << got << endl;
-//}
-//++i;
-//}
