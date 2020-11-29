@@ -13,8 +13,8 @@ template<typename T>
 bool is_equal(const T & x, const T & y) {
     return x == y;
 }
-bool is_equal(double x, double y) {
-    return std::fabs(x - y) < std::numeric_limits<double>::epsilon();
+bool is_equal(long double x, long double y) {
+    return std::fabs(x - y) <= std::numeric_limits<long double>::epsilon();
 }
 
 template <typename T>
