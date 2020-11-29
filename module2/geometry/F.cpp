@@ -48,12 +48,14 @@ int main() {
         id++;
     }
 
+    // add to infinite points
     Vertex<T> p1(INF_F, -INF_F+100, 2 * INF_F * INF_F, -1);
     Vertex<T> p2(-INF_F, INF_F-100, 2 * INF_F * INF_F, -2);
 
     vertices3D.push_back(p1);
     vertices3D.push_back(p2);
 
+    // build lower convex hull using Chan algo
     ConvexHull3DClass<T> cch3(vertices3D);
     auto lowerHull3D = cch3.lowerHull(ConvexHull3DClass<T>::xLess_zGreater);
 
@@ -63,7 +65,7 @@ int main() {
         return 0;
     }
 
-    std::set<int64_t> fakePoints;
+    std::set<int> fakePoints;
 
     for (const auto & plane : lowerHull3D) {
         if ((plane.vertices[0].id < 0) ||
@@ -81,6 +83,7 @@ int main() {
     auto isFake = [&fakePoints](int64_t index){
         return (fakePoints.count(index) == 1);
     };
+
     for (const auto &plane : lowerHull3D) {
         if (!isFake(plane.vertices[0].id))
             ++edgesCount;
