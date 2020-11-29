@@ -1,33 +1,40 @@
 #include "geometry2D.cpp"
-#include <iostream>
 #include <algorithm>
 #include <vector>
 #include <cmath>
+#include <functional>
+#include <string>
 
-const static double INF = 1e9;
+const static double INF_LD = 1e40; // std::numeric_limits<double>::max();
+const static double INF_F = 1e10; // std::numeric_limits<float>::max();
 
 template<typename T>
 class Point3D {
 public:
     T x, y, z;
 
-    size_t id;
+    int id;
 
-    Point3D(const T & x, const T & y, const T & z, size_t id) : x(x), y(y), z(z), id(id) {}
+    Point3D(const T & x, const T & y, const T & z, int id) : x(x), y(y), z(z), id(id) {}
 
-    void rotate(double angle) {
-        double new_z = z * cos(angle) + y * sin(angle);
-        double new_y = -z * sin(angle) + y * cos(angle);
+    [[nodiscard]] std::string toString() const {
+        std::string s = std::to_string(x);
+        return s + " " + std::to_string(y) + " " + std::to_string(z);
+    }
+
+    void rotate(T angle) {
+        T new_z = z * cosl(angle) + y * sinl(angle);
+        T new_y = -z * sinl(angle) + y * cosl(angle);
         z = new_z;
         y = new_y;
 
-        double new_x = x * cos(angle) + z * sin(angle);
-        new_z = -x * sin(angle) + z * cos(angle);
+        T new_x = x * cosl(angle) + z * sinl(angle);
+        new_z = -x * sinl(angle) + z * cosl(angle);
         x = new_x;
         z = new_z;
 
-        new_x = x * cos(angle) + y * sin(angle);
-        new_y = -x * sin(angle) + y * cos(angle);
+        new_x = x * cosl(angle) + y * sinl(angle);
+        new_y = -x * sinl(angle) + y * cosl(angle);
         x = new_x;
         y = new_y;
     }
@@ -39,9 +46,12 @@ public:
     Vertex<T> * prev = nullptr;
     Vertex<T> * next = nullptr;
 
-    Vertex(const T & x, const T & y, const T & z, size_t id) : Point3D<T>(x, y, z, id) {}
+    Vertex(const T & x, const T & y, const T & z, int id) : Point3D<T>(x, y, z, id) {}
 
     bool updateLinks() {
+//        if (!prev)
+//            return true;
+
         if (prev->next == this) {
             prev->next = next;
             next->prev = prev;
@@ -58,7 +68,7 @@ public:
 };
 
 template<typename T>
-Point3D<T> readPoint3D(std::istream & in, size_t id) {
+Point3D<T> readPoint3D(std::istream & in, int id) {
     T x, y, z;
     in >> x >> y >> z;
     return {x, y, z, id};
@@ -147,7 +157,7 @@ private:
     static std::vector<Vertex<T> *> hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size_t to) ; // return ConvexHull of part [begin, end) as ordered vector of ptr to points
     static std::vector<Vertex<T> *> merge(const std::vector<Vertex<T> *> & left, const std::vector<Vertex<T> *> & right, Vertex<T> * left_br, Vertex<T> * right_br); // merge two ConvexHulls
 
-    static void buildBridges(std::vector<Vertex<T> *> & data, Vertex<T> * left_br, Vertex<T> * right_br, T x);
+    static void buildBridges(std::vector<Vertex<T> *> & data, Vertex<T>* & left_br, Vertex<T>* & right_br, T x);
     static std::pair<Vertex<T> *, Vertex<T> *> findBridge(Vertex<T> * left_br, Vertex<T> * right_br);
 
     static T turnTime(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c);
@@ -247,7 +257,7 @@ ConvexHull3DClass<T>::hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size
 
     if (from + 1 == to) { // n == 1
         std::vector<Vertex<T> *> result;
-        result.emplace_back(pts[from]);
+        result.push_back(pts[from]);
         return result;
     }
 
@@ -262,7 +272,7 @@ ConvexHull3DClass<T>::hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size
 template <typename T>
 T ConvexHull3DClass<T>::turnTime(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c) {
     if (a == nullptr || b == nullptr || c == nullptr) {
-        return INF;
+        return INF_LD;
     }
     Vector<T> ab_y({a->x, a->y}, {b->x, b->y});
     Vector<T> bc_y({b->x, b->y}, {c->x, c->y});
@@ -271,7 +281,7 @@ T ConvexHull3DClass<T>::turnTime(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c) {
     Vector<T> bc_z({b->x, b->z}, {c->x, c->z});
 
     T temp = crossProduct(ab_y, bc_y);
-    return is_equal(temp,  static_cast<T>(0)) ? INF : crossProduct(ab_z, bc_z) / temp;
+    return is_equal(temp,  static_cast<T>(0)) ? INF_LD : crossProduct(ab_z, bc_z) / temp;
 }
 
 template <typename T>
@@ -318,14 +328,14 @@ ConvexHull3DClass<T>::merge(const std::vector<Vertex<T> *> & left,
     auto * left_br = bridge.first;
     auto * right_br = bridge.second;
 
-    T time = -INF;
+    T time = -INF_LD;
 
     auto l_it = left.begin();
     auto r_it = right.begin();
 
 
     while (true) {
-        T min_time = INF;
+        T min_time = INF_LD;
 
         T temp;
         EventType event;
@@ -358,7 +368,7 @@ ConvexHull3DClass<T>::merge(const std::vector<Vertex<T> *> & left,
             event = RIGHT_BRIDGE_NEXT;
         }
 
-        if (is_equal(min_time, INF)) break;
+        if (is_equal(min_time, INF_LD)) break;
 
         time = min_time;
 
@@ -402,7 +412,7 @@ ConvexHull3DClass<T>::merge(const std::vector<Vertex<T> *> & left,
 
 template <typename T>
 void ConvexHull3DClass<T>::buildBridges(std::vector<Vertex<T> *> & data,
-                                        Vertex<T> * left_br, Vertex<T> * right_br, T x) {
+                                        Vertex<T> *& left_br, Vertex<T> *& right_br, T x) {
 
     left_br->next = right_br;
     right_br->prev = left_br;
