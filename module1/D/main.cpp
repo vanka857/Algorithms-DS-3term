@@ -33,7 +33,7 @@ SuffixArray::SuffixArray(std::string text) : text_(std::move(text)), size_(text_
     fillSuffixArray();
 }
 
-std::vector<int> count(const size_t & alphabet_size, const std::function<int (size_t i)>& getI, const size_t & src_size) {
+std::vector<int> count(size_t alphabet_size, const std::function<int (size_t i)>& getI, size_t src_size) {
     // функция расчёта позиции элементов, получаемых из getI(size_t i) в сортировке подсчётом
 
     std::vector<int> counter(alphabet_size, 0);
@@ -45,7 +45,7 @@ std::vector<int> count(const size_t & alphabet_size, const std::function<int (si
         counter[i] += counter[i - 1];
     }
 
-    return std::move(counter);
+    return counter;
 }
 
 void SuffixArray::fillSuffixArray() {
