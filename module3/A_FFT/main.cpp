@@ -90,6 +90,7 @@ struct {
 
 
 class WavFile{
+    // Класс, отвечающий за чтение, храние wav файлов в оперативной памяти и запись их в файловую систему.
 
 protected:
     WavHeader header{};
@@ -147,11 +148,12 @@ private:
         fread(&header, sizeof(WavHeader), 1, file);
 
         double value;
-
         data.reserve(header.subchunk2Size);
 
         size_t samples = header.subchunk2Size / (header.bitsPerSample / 8);
 
+        // Сложно сделать что-то лучше, учитывая, что необходимо читать блоками по 8, 16, 24,... бит,
+        // которые образуют соответственно знаковое 8, 16, 24,...-битное число.
         switch(header.bitsPerSample) {
             case 8:
                 for (size_t i = 0; i < samples; ++i) {
@@ -206,6 +208,8 @@ private:
 
         fwrite(&header, sizeof(WavHeader), 1, file);
 
+        // Опять же очень грустный код, потому что нам нужно записывать блоками
+        // неизвестного в compile-time размера (битности)
         switch(header.bitsPerSample) {
             case 8:
                 for (double i : data) {
@@ -248,6 +252,8 @@ private:
 };
 
 class WavFileChannel : public WavFile{
+    // Класс для работы с wav файлами, поддерживающий работу с отдельными каналами.
+
     std::vector<std::vector<double>> channels;
 
 public:
@@ -271,6 +277,8 @@ public:
     }
 
     void updateData() {
+        // функция, необходимая для обновления данных файла после изменения каналов
+
         size_t n_of_blocks = header.subchunk2Size / header.blockAlign;
 
         for (size_t i_block = 0; i_block < n_of_blocks; ++i_block) {
@@ -283,6 +291,8 @@ public:
 private:
 
     void createChannels(){
+        // генерируем данные по-канально.
+
         channels.resize(header.numChannels);
         size_t n_of_blocks = header.subchunk2Size / header.blockAlign;
         for (size_t i_channel = 0; i_channel < header.numChannels; ++i_channel) {
@@ -296,33 +306,47 @@ private:
 };
 
 class WavProcessor{
+    // Класс, содержащий методы для редактирования wav файлов
+
 private:
     typedef std::complex<double> base;
 
 public:
     WavProcessor() = delete;
+
     static WavFileChannel compress(const WavFile & file, double rate = 1.0){
+        // функция, создающая wav-файл, с rate долей занулённых гармоник (последних коэффициентов) в разложении Фурье данных файла
+
         return compress(WavFileChannel(file.getHeader(), file.getData()), rate);
     }
     static WavFileChannel compress(WavFileChannel file, double rate = 1.0){
 
         for (size_t i_channel = 0; i_channel < file.getHeader().numChannels; ++i_channel) {
+            // выполним эти действия для всех каналов по отдельности.
+
             auto data = file.getChannel(i_channel);
+            // дополняем длину до 2^n
             complete2(data, 0.0);
 
+            // создаем массив комплексных чисел
             auto complex_data = makeComplex(data);
+
+            // выполняем быстрое преобразование Фурье
             fft(complex_data, false);
 
-
+            // обнуляем последнюю долю rate коэффициентов в разложении Фурье
             for (size_t i = rate * complex_data.size(); i < complex_data.size(); ++i) {
                 complex_data[i] = 0;
             }
 
+            // выполняем обратное быстрое преобразование Фурье
             fft(complex_data, true);
 
+            // записываем измененные каналы файла
             file.setChannel(makeReal(complex_data), i_channel, false);
         }
 
+        // обновляем основные данные файла, потому что каналы были изменены
         file.updateData();
 
         return file;
@@ -351,6 +375,7 @@ private:
     template<class T>
     static void complete2(std::vector<T> & data, T new_item) {
         // Дополняет массив нулями до длины 2^n
+
         size_t n = 1;
         while (n < data.size()) {
             n <<= 1;
@@ -368,6 +393,7 @@ private:
             a0[j] = a[i];
             a1[j] = a[i+1];
         }
+        // Для достижения асимптотики O(n log n) воспользуемся принципом "разделяй и властвуй" и будем рекурсивно вызывать fft от половины данных.
         fft (a0, invert);
         fft (a1, invert);
 
@@ -376,17 +402,23 @@ private:
         for (size_t i = 0; i < n / 2; ++i) {
             a[i] = a0[i] + w * a1[i];
             a[i+n/2] = a0[i] - w * a1[i];
+
             if (invert) {
-                a[i] /= 2,  a[i+n/2] /= 2;
+                a[i] /= 2;
+                a[i+n/2] /= 2;
             }
+
             w *= w_n;
         }
     }
 };
 
 void createAndCompress(const std::string & input_filename, const std::string & output_filename, double rate) {
+    // функция, создающая файл, compressed с указанным rate
+
     WavFile input(input_filename);
-    input.printInfo();
+
+//    input.printInfo();
 
     WavFile output = WavProcessor::compress(input, rate);
     output.save(output_filename);
