@@ -32,12 +32,15 @@
 template<typename T>
 void printVector(const std::vector<T> & data, std::ostream & out) {
     for (const auto & i : data) {
-        out << i.toString() << std::endl;
+        out << i << std::endl;
     }
 }
 
 int main() {
     using T = double;
+
+    // It used for correct Chan algo work
+    const static double CHEAT_ROTATE = 0.05;
 
     size_t M;
     std::cin >> M;
@@ -46,33 +49,26 @@ int main() {
         size_t N;
         std::cin >> N;
 
-        std::vector<Vertex<T> > points;
-        points.reserve(N);
+        std::vector<Point3DChan<T> > points_Chan;
+        points_Chan.reserve(N);
 
         for (size_t j = 0; j < N; ++j) {
-            auto p = readPoint3D<T>(std::cin, j);
-            p.rotate(0.05);
-            points.emplace_back(p.x, p.y, p.z, p.id);
+            Point3D<T> p{};
+            std::cin >> p;
+            p.id = j;
+            p.rotate(CHEAT_ROTATE);
+            points_Chan.emplace_back(p.x, p.y, p.z, p.id);
         }
 
-        ConvexHull3DClass cch(points);
+        ConvexHull3D cch(points_Chan);
         // TODO выводить в ответ неиспорченные поворотом грани (из исходного неизмененного вектора)
         // TODO научиться приинмать точки integer (создавать копию в double для поворота)
 
-        // TODO переписать на unique_ptr, shared_ptr
         auto ch = cch.hull();
 
         std::sort(ch.begin(), ch.end(), [](Face<T> & lhs, Face<T> & rhs){
-            if (lhs.vertices[0].id == rhs.vertices[0].id) {
-                if (lhs.vertices[1].id == rhs.vertices[1].id) {
-                    return lhs.vertices[2].id < rhs.vertices[2].id;
-                } else {
-                    return lhs.vertices[1].id < rhs.vertices[1].id;
-                }
-            }
-            else {
-                return lhs.vertices[0].id < rhs.vertices[0].id;
-            }
+            return std::tie(lhs.vertices[0].id, lhs.vertices[1].id, lhs.vertices[2].id) <
+                   std::tie(rhs.vertices[0].id, rhs.vertices[1].id, rhs.vertices[2].id);
         });
 
         std::cout << ch.size() << std::endl;
