@@ -50,13 +50,15 @@ int main() {
     points.reserve(N);
 
     for (size_t i = 0; i < N; ++i) {
-        points.emplace_back(readPoint<T>(std::cin));
+        Point<T> p{};
+        std::cin >> p;
+        points.emplace_back(p);
     }
 
-    ConvexHullClass<std::vector<Point<T>>, T> conv_hull_class(points.begin(), points.end());
-    auto convexHull = conv_hull_class.createConvexHull();
+    ConvexHull<std::vector<Point<T>>, T> chc(points.begin(), points.end());
+    auto convex_hull = chc.createConvexHull();
 
-    std::cout << std::setprecision(10) << calcChainLen(convexHull);
+    std::cout << std::setprecision(10) << calcChainLen(convex_hull.getVertices());
 }
 
 //13
