@@ -16,12 +16,14 @@
 //Сохраните wav файл, сравните на слух с исходным.
 
 #include <iostream>
+#include <fstream>
 #include <complex>
-#include <utility>
 #include <vector>
 #include <cmath>
 #include <string>
+#include <cstring>
 #include <algorithm>
+#include <cassert>
 
 
 // Структура, описывающая заголовок WAV файла.
@@ -30,14 +32,14 @@ struct {
 
     // Содержит символы "RIFF" в ASCII кодировке
     // (0x52494646 в big-endian представлении)
-    char chunkId[4];
+    char chunk_id[4];
 
-    // 36 + subchunk2Size, или более точно:
-    // 4 + (8 + subchunk1Size) + (8 + subchunk2Size)
+    // 36 + subchunk_2_size, или более точно:
+    // 4 + (8 + subchunk_1_size) + (8 + subchunk_2_size)
     // Это оставшийся размер цепочки, начиная с этой позиции.
     // Иначе говоря, это размер файла - 8, то есть,
-    // исключены поля chunkId и chunkSize.
-    unsigned int chunkSize;
+    // исключены поля chunk_id и chunk_size.
+    unsigned int chunk_size;
 
     // Содержит символы "WAVE"
     // (0x57415645 в big-endian представлении)
@@ -48,285 +50,238 @@ struct {
 
     // Содержит символы "fmt "
     // (0x666d7420 в big-endian представлении)
-    char subchunk1Id[4];
+    char subchunk_1_id[4];
 
     // 16 для формата PCM.
     // Это оставшийся размер подцепочки, начиная с этой позиции.
-    unsigned int subchunk1Size;
+    unsigned int subchunk_1_size;
 
     // Аудио формат, полный список можно получить здесь http://audiocoding.ru/wav_formats.txt
     // Для PCM = 1 (то есть, Линейное квантование).
     // Значения, отличающиеся от 1, обозначают некоторый формат сжатия.
-    unsigned short audioFormat;
+    unsigned short audio_format;
 
     // Количество каналов. Моно = 1, Стерео = 2 и т.д.
-    unsigned short numChannels;
+    unsigned short num_channels;
 
     // Частота дискретизации. 8000 Гц, 44100 Гц и т.д.
-    unsigned int sampleRate;
+    unsigned int sample_rate;
 
-    // sampleRate * numChannels * bitsPerSample/8
-    unsigned int byteRate;
+    // sample_rate * num_channels * bits_per_sample/8
+    unsigned int byte_rate;
 
-    // numChannels * bitsPerSample/8
+    // num_channels * bits_per_sample/8
     // Количество байт для одного сэмпла, включая все каналы.
-    unsigned short blockAlign;
+    unsigned short block_align;
 
     // Так называемая "глубиная" или точность звучания. 8 бит, 16 бит и т.д.
-    unsigned short bitsPerSample;
+    unsigned short bits_per_sample;
 
     // Подцепочка "data" содержит аудио-данные и их размер.
 
     // Содержит символы "data"
     // (0x64617461 в big-endian представлении)
-    char subchunk2Id[4];
+    char subchunk_2_id[4];
 
-    // numSamples * numChannels * bitsPerSample/8
+    // numSamples * num_channels * bits_per_sample/8
     // Количество байт в области данных.
-    unsigned int subchunk2Size;
+    unsigned int subchunk_2_size;
 
     // Далее следуют непосредственно Wav данные.
 } typedef WavHeader;
 
+// Класс, содержащий методы для редактирования wav файлов
+class WavProcessor;
+// Класс, отвечающий за чтение, храние wav файлов в оперативной памяти и запись их в файловую систему.
+class WavFile;
 
+// Класс, отвечающий за чтение, храние wav файлов в оперативной памяти и запись их в файловую систему.
 class WavFile{
-    // Класс, отвечающий за чтение, храние wav файлов в оперативной памяти и запись их в файловую систему.
+    friend WavProcessor;
 
-protected:
+private:
     WavHeader header{};
-    std::vector<double> data;
+    std::vector<std::vector<double>> channels;
+    size_t bytes_per_sample = 16;
+    size_t n_of_blocks = 0;
 
 public:
     explicit WavFile(const std::string & filename) {
-        read_file_wav(filename.c_str());
-    }
-    WavFile(const WavHeader & header, std::vector<double> data) : header(header), data(std::move(data)) {}
-
-    [[nodiscard]] std::vector<double> getData() const {
-        return data;
-    }
-
-    [[nodiscard]] WavHeader getHeader() const {
-        return header;
+        read(filename);
     }
 
     void printInfo() const {
         // Выводим полученные данные
-        std::cout << header.chunkId[0] << header.chunkId[1] << header.chunkId[2] << header.chunkId[3] << std::endl;
-        printf("Chunk size: %d\n", header.chunkSize);
+        std::cout << header.chunk_id[0] << header.chunk_id[1] << header.chunk_id[2] << header.chunk_id[3] << std::endl;
+        printf("Chunk size: %d\n", header.chunk_size);
         std::cout << header.format[0] << header.format[1] << header.format[2] << header.format[3] << std::endl;
-        std::cout << header.subchunk1Id[0] << header.subchunk1Id[1] << header.subchunk1Id[2] << header.subchunk1Id[3] << std::endl;
-        printf("SubChunkId1: %d\n", header.subchunk1Size);
-        printf("Audio format: %d\n", header.audioFormat);
-        printf("Channels: %d\n", header.numChannels);
-        printf("Sample rate: %d\n", header.sampleRate);
-        printf("Bits per sample: %d\n", header.bitsPerSample);
-        std::cout << header.subchunk2Id[0] << header.subchunk2Id[1] << header.subchunk2Id[2] << header.subchunk2Id[3] << std::endl;
+        std::cout << header.subchunk_1_id[0] << header.subchunk_1_id[1] << header.subchunk_1_id[2] << header.subchunk_1_id[3] << std::endl;
+        printf("SubChunkId1: %d\n", header.subchunk_1_size);
+        printf("Audio format: %d\n", header.audio_format);
+        printf("Channels: %d\n", header.num_channels);
+        printf("Sample rate: %d\n", header.sample_rate);
+        printf("Bits per sample: %d\n", header.bits_per_sample);
+        std::cout << header.subchunk_2_id[0] << header.subchunk_2_id[1] << header.subchunk_2_id[2] << header.subchunk_2_id[3] << std::endl;
 
         // Посчитаем длительность воспроизведения в секундах
-        double fDurationSeconds = 1.f * header.subchunk2Size / (header.bitsPerSample / 8) / header.numChannels / header.sampleRate;
+        double fDurationSeconds = static_cast<double>(header.subchunk_2_size) / (header.bits_per_sample / 8) / header.num_channels / header.sample_rate;
         int iDurationMinutes = (int)floor(fDurationSeconds) / 60;
         fDurationSeconds = fDurationSeconds - (iDurationMinutes * 60);
         printf("Duration: %02d:%02.f\n", iDurationMinutes, fDurationSeconds);
     }
 
     void save(const std::string & filename) {
-        save_file_wav(filename.c_str());
+        write(filename);
     }
 
 private:
-    // TODO use modern file read-write
-    void read_file_wav(const char* filename)
-    {
-        FILE *file = fopen(filename, "rb");
-        if (!file)
-        {
-            std::cout << "Failed open file";
-            return;
-        }
 
-        fread(&header, sizeof(WavHeader), 1, file);
+    double readIntSample(std::ifstream & file) const {
+        // Используем магию приведения типов указателей Little-Endian.
 
-        double value;
-        data.reserve(header.subchunk2Size);
+        // 8 - максимальное количество байт в сэмпле аудиофайла
+        const static size_t MAX_BYTE_PER_SAMPLE = 8;
 
-        size_t samples = header.subchunk2Size / (header.bitsPerSample / 8);
+        char buf[MAX_BYTE_PER_SAMPLE];
+        memset(buf, 0, bytes_per_sample);
 
-        // Сложно сделать что-то лучше, учитывая, что необходимо читать блоками по 8, 16, 24,... бит,
-        // которые образуют соответственно знаковое 8, 16, 24,...-битное число.
-        switch(header.bitsPerSample) {
+        file.read(buf, bytes_per_sample);
+
+        bool sign = buf[bytes_per_sample - 1] >> 7; // смотрим на знаковый бит числа в Little-Endian
+        uint8_t end_template = sign ? 0b11111111 : 0;
+        // дополняем число в конце единичками "11111111" или нулями "00000000" для
+        // корректного представления отрицательных чисел
+        size_t end_len = MAX_BYTE_PER_SAMPLE - bytes_per_sample;
+        memset(buf + bytes_per_sample, end_template, end_len);
+
+        return *reinterpret_cast<int64_t*>(buf);
+    }
+    double readSample(std::ifstream & file) const {
+        switch (header.bits_per_sample) {
             case 8:
-                for (size_t i = 0; i < samples; ++i) {
-                    auto * val = new int8_t;
-                    if (fread(val, 1, 1, file) == -1) break;
-                    data.push_back(*val);
-                    delete val;
-                }
+                // uint8_t data (unsupported)
+                perror("Unsupported bits per sample. Only int16, int24, int32");
                 break;
             case 16:
-                for (size_t i = 0; i < samples; ++i) {
-                    auto * val = new int16_t;
-                    if (fread(val, 2, 1, file) == -1) break;
-                    data.push_back(*val);
-                    delete val;
-                }
+                // int16_t data
+                return readIntSample(file);
+                break;
+            case 24:
+                // int24_t data
+                return readIntSample(file);
                 break;
             case 32:
-                for (size_t i = 0; i < samples; ++i) {
-                    auto * val = new int32_t;
-                    if (fread(val, 4, 1, file) == -1) break;
-                    data.push_back(*val);
-                    delete val;
-                }
+                // int24_t data
+                // of float32 data (unsupported)
+                return readIntSample(file);
                 break;
             case 64:
-                for (size_t i = 0; i < samples; ++i) {
-                    auto * val = new int64_t;
-                    if (fread(val, 8, 1, file) == -1) break;
-                    data.push_back(*val);
-                    delete val;
-                }
+                // float64 data (unsupported)
+                perror("Unsupported bits per sample. Only int16, int24, int32");
                 break;
             default:
-                char s[100];
-                snprintf(s, 100, "%d bits per sample is unsupported", header.bitsPerSample);
-                perror(s);
-                break;
+                perror("Unsupported bits per sample. Only int16, int24, int32");
         }
-
-        std::cout << "Data is successfully loaded." << std::endl;
-        fclose(file);
+        return 0;
     }
 
-    void save_file_wav(const char* filename) {
-        FILE *file = fopen(filename, "w");
-        if (!file)
-        {
-            std::cout << "Failed write file";
-            return;
-        }
-
-        fwrite(&header, sizeof(WavHeader), 1, file);
-
-        // Опять же очень грустный код, потому что нам нужно записывать блоками
-        // неизвестного в compile-time размера (битности)
-        switch(header.bitsPerSample) {
-            case 8:
-                for (double i : data) {
-                    auto temp = static_cast<int8_t>(round(i));
-                    auto * val = &temp;
-                    fwrite(val, 1, 1, file);
-                }
-                break;
-            case 16:
-                for (double i : data) {
-                    auto temp = static_cast<int16_t>(round(i));
-                    auto * val = &temp;
-                    fwrite(val, 2, 1, file);
-                }
-                break;
-            case 32:
-                for (double i : data) {
-                    auto temp = static_cast<int32_t>(round(i));
-                    auto * val = &temp;
-                    fwrite(val, 4, 1, file);
-                }
-                break;
-            case 64:
-                for (double i : data) {
-                    auto temp = static_cast<int64_t>(round(i));
-                    auto * val = &temp;
-                    fwrite(val, 8, 1, file);
-                }
-                break;
-            default:
-                char s[100];
-                snprintf(s, 100, "%d bits per sample is unsupported", header.bitsPerSample);
-                perror(s);
-                break;
-        }
-
-        std::cout << "Output file is successfully wrote." << std::endl;
-        fclose(file);
-    }
-};
-
-class WavFileChannel : public WavFile{
-    // Класс для работы с wav файлами, поддерживающий работу с отдельными каналами.
-
-    std::vector<std::vector<double>> channels;
-
-public:
-    [[maybe_unused]] explicit WavFileChannel(const std::string & filename) : WavFile(filename) {
-        createChannels();
-    };
-
-    WavFileChannel(const WavHeader & header, std::vector<double> data) : WavFile(header, std::move(data)) {
-        createChannels();
-    };
-
-    [[nodiscard]] std::vector<double> getChannel(size_t i) const {
-        return channels[i];
+    void readHeader(std::ifstream & file) {
+        file.read(reinterpret_cast<char*>(&header), sizeof(header));
     }
 
-    void setChannel(std::vector<double> new_channel, size_t i, bool update = true) {
-        channels[i] = std::move(new_channel);
-        if (update) {
-            updateData();
-        }
-    }
+    void readData(std::ifstream & file) {
+        assert(("I do not support more than 8 bytes per sample!", header.bits_per_sample / 8 <= 8));
 
-    void updateData() {
-        // функция, необходимая для обновления данных файла после изменения каналов
-
-        size_t n_of_blocks = header.subchunk2Size / header.blockAlign;
+        channels.resize(header.num_channels);
 
         for (size_t i_block = 0; i_block < n_of_blocks; ++i_block) {
-            for (size_t i_channel = 0; i_channel < header.numChannels; ++i_channel) {
-                data[i_channel + i_block * header.numChannels] = channels[i_channel][i_block];
+            for (size_t i_channel = 0; i_channel < header.num_channels && i_channel < channels.size(); ++i_channel) {
+                channels[i_channel].push_back(readSample(file));
             }
         }
     }
 
-private:
+    void read(const std::string & filename)
+    {
+        std::ifstream file(filename, std::ios_base::in | std::ios_base::binary);
+        readHeader(file);
 
-    void createChannels(){
-        // генерируем данные по-канально.
+        bytes_per_sample = header.bits_per_sample / 8;
+        n_of_blocks = header.subchunk_2_size / header.block_align;
+        readData(file);
 
-        channels.resize(header.numChannels);
-        size_t n_of_blocks = header.subchunk2Size / header.blockAlign;
-        for (size_t i_channel = 0; i_channel < header.numChannels; ++i_channel) {
-            channels[i_channel].resize(n_of_blocks);
-            for (size_t i_block = 0; i_block < n_of_blocks; ++i_block) {
-                channels[i_channel][i_block] = data[i_channel + i_block * header.numChannels];
+        file.close();
+    }
+
+    void writeIntSample(std::ofstream & file, double sample_data) const {
+        // Используя приведение типов указателей, записываем данные в виде char-ов
+
+        // Так как данные хранятся и записываются в формате Little-Endian, это законно
+
+        int64_t sample_data_rounded = round(sample_data);
+        file.write(reinterpret_cast<char*>(&sample_data_rounded), bytes_per_sample);
+    }
+    void writeSample(std::ofstream & file, double sample_data) const {
+        // Будем поддерживать максимум 64 битные сэмплы.
+        switch (header.bits_per_sample) {
+            case 8:
+                // uint8_t data (unsupported)
+                perror("Unsupported bits per sample. Only int16, int24, int32");
+                break;
+            case 16:
+                // int16_t data
+                return writeIntSample(file, sample_data);
+                break;
+            case 24:
+                // int24_t data
+                return writeIntSample(file, sample_data);
+                break;
+            case 32:
+                // int24_t data
+                // of float32 data (unsupported)
+                return writeIntSample(file, sample_data);
+                break;
+            case 64:
+                // float64 data (unsupported)
+                perror("Unsupported bits per sample. Only int16, int24, int32");
+                break;
+            default:
+                perror("Unsupported bits per sample. Only int16, int24, int32");
+        }
+    }
+    void write(const std::string & filename) {
+        std::ofstream file(filename, std::ios_base::out | std::ios_base::trunc | std::ios_base::binary);
+
+        file.write(reinterpret_cast<char*>(&header), sizeof(header));
+
+        for (size_t i_block = 0; i_block < n_of_blocks; ++i_block) {
+            for (size_t i_channel = 0; i_channel < header.num_channels && i_channel < channels.size(); ++i_channel) {
+                writeIntSample(file, channels[i_channel][i_block]);
             }
         }
 
+        file.close();
     }
 };
 
+// Класс, содержащий методы для редактирования wav файлов
 class WavProcessor{
-    // Класс, содержащий методы для редактирования wav файлов
-
-private:
     typedef std::complex<double> base;
 
 public:
     WavProcessor() = delete;
 
-    static WavFileChannel compress(const WavFile & file, double rate = 1.0){
-        // функция, создающая wav-файл, с rate долей занулённых гармоник (последних коэффициентов) в разложении Фурье данных файла
+    static WavFile compress(WavFile file, double rate = 1.0) {
 
-        return compress(WavFileChannel(file.getHeader(), file.getData()), rate);
-    }
-    static WavFileChannel compress(WavFileChannel file, double rate = 1.0){
-
-        for (size_t i_channel = 0; i_channel < file.getHeader().numChannels; ++i_channel) {
+        for (size_t i_channel = 0; i_channel < file.header.num_channels; ++i_channel) {
             // выполним эти действия для всех каналов по отдельности.
 
-            auto data = file.getChannel(i_channel);
+            auto & data = file.channels[i_channel];
+
+            size_t len = data.size();
+
             // дополняем длину до 2^n
-            complete2(data, 0.0);
+            complete2n(data, 0.0);
 
             // создаем массив комплексных чисел
             auto complex_data = makeComplex(data);
@@ -342,13 +297,12 @@ public:
             // выполняем обратное быстрое преобразование Фурье
             fft(complex_data, true);
 
-            // записываем измененные каналы файла
-            file.setChannel(makeReal(complex_data), i_channel, false);
+            // получаем вектор действительных чисел
+            auto real = makeReal(complex_data);
+
+            // записываем измения в файл (пишем только нужный изначальный размер, помня, что сы увеличивали длину)
+            data = std::vector<double>(real.begin(), real.begin() + len);
         }
-
-        // обновляем основные данные файла, потому что каналы были изменены
-        file.updateData();
-
         return file;
     }
 
@@ -373,20 +327,21 @@ private:
         return real;
     }
     template<class T>
-    static void complete2(std::vector<T> & data, T new_item) {
-        // Дополняет массив нулями до длины 2^n
+    static void complete2n(std::vector<T> & data, T new_item) {
+        // Дополняет массив до длины 2^n элементами new_item
 
         size_t n = 1;
         while (n < data.size()) {
             n <<= 1;
         }
-        n <<= 1;
         data.resize(n, new_item);
     }
 
     static void fft (std::vector<base> & a, bool invert) {
-        int n = (int) a.size();
-        if (n == 1)  return;
+        size_t n = a.size();
+        if (n == 1){
+            return;
+        }
 
         std::vector<base> a0 (n/2),  a1 (n/2);
         for (size_t i = 0, j = 0; i < n; i += 2, ++j) {
@@ -418,28 +373,37 @@ void createAndCompress(const std::string & input_filename, const std::string & o
 
     WavFile input(input_filename);
 
-//    input.printInfo();
+    input.printInfo();
 
     WavFile output = WavProcessor::compress(input, rate);
     output.save(output_filename);
+
+    std::cout << output_filename << " saved!\n" << std::endl;
 }
 
 int main(int argc, char** argv) {
-    const static double COMPRESS_RATE = 0.2;
+    const static double COMPRESS_RATE = 0.05;
     const static std::string OUT_PREFIX = "out_";
 
     std::string input_filename, output_filename;
-    if (argc < 2) {
-        while(std::cout << "Enter input_filename .wav filename: ", std::cin >> input_filename) {
+    if (argc < 3) {
+        while(std::cout << "Enter .wav filename: ", std::cin >> input_filename) {
+            double rate;
+
+            std::cout << "Enter rate: ";
+            std::cin >> rate;
             output_filename = OUT_PREFIX + input_filename;
-            createAndCompress(input_filename, output_filename, COMPRESS_RATE);
+            createAndCompress(input_filename, output_filename, rate);
         }
     }
     else {
-        for (size_t i = 1; i < argc; ++i) {
+        for (size_t i = 2; i < argc; ++i) {
+            double rate = strtod(argv[1], nullptr);
+            std::cout << "Rate: " << rate;
             input_filename = argv[i];
+            std::cout << " file: " << input_filename << std::endl;
             output_filename = OUT_PREFIX + input_filename;
-            createAndCompress(input_filename, output_filename, COMPRESS_RATE);
+            createAndCompress(input_filename, output_filename, rate);
         }
     }
 
