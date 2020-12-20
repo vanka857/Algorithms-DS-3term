@@ -35,7 +35,9 @@ Polygon<T> readPolygon(std::istream & in) {
     vertices.reserve(N);
 
     for (size_t i = 0; i < N; ++i) {
-        vertices.emplace_back(readPoint<T>(in));
+        Point<T> p{};
+        std::cin >> p;
+        vertices.emplace_back(p);
     }
 
     return Polygon<T>(vertices);
