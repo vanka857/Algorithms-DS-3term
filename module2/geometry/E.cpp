@@ -28,9 +28,8 @@
 #include <algorithm>
 #include "geometry2D.cpp"
 
-template<typename T, typename D>
+template<typename T>
 // expected:
-// D - floating point type
 // T - integer or floating point type
 class Segment {
 public:
@@ -42,24 +41,24 @@ public:
     Segment() = default;
     Segment(const Point<T> & p, const Point<T> & q, size_t id) : p(p), q(q), id(id) {}
 
-    [[nodiscard]] D getY(const T & x) const {
-        if (p.x == q.x)  {
+    [[nodiscard]] double getY(const T & x) const {
+        if (is_equal(p.x, q.x))  {
             return p.y;
         }
         // static_cast для расчетв в формате с плавающей точкой
-        return p.y + (q.y - p.y) * (x - p.x) / static_cast<D>(q.x - p.x);
+        return p.y + (q.y - p.y) * (x - p.x) / static_cast<double >(q.x - p.x);
     }
 
     [[nodiscard]] bool segmCompare (const Segment & rhs, const T x) const {
-        if (std::abs(getY(x) - rhs.getY(x)) > 1e-9) {
+        if (!is_equal(getY(x), rhs.getY(x))) {
             return getY(x) < rhs.getY(x);
         }
         return id < rhs.id;
     }
 };
 
-template<typename T, typename D>
-bool intersects(const Segment<T, D> & lhs, const Segment<T, D> & rhs) {
+template<typename T>
+bool intersects(const Segment<T> & lhs, const Segment<T> & rhs) {
     return intersects(lhs.p, lhs.q, rhs.p, rhs.q);
 }
 
@@ -80,7 +79,7 @@ public:
     Event(size_t id, EventType event_type, const T & x) : id(id), event_type(event_type), x(x) {}
 
     bool operator < (const Event & rhs) const {
-        if (x != rhs.x) {
+        if (!is_equal(x, rhs.x)) {
             return x < rhs.x;
         }
         return event_type < rhs.event_type;
@@ -112,9 +111,9 @@ typename Container::iterator my_next(const Container & container, const typename
     return std::next(it);
 }
 
-template<typename T, typename D>
+template<typename T>
 std::pair<ssize_t, ssize_t>
-firstIntersections(const std::vector<Segment<T, D>> & segments) {
+firstIntersections(const std::vector<Segment<T>> & segments) {
 
     std::vector<Event<T>> events;
     events.reserve(segments.size() * 2);
@@ -127,12 +126,12 @@ firstIntersections(const std::vector<Segment<T, D>> & segments) {
 
     T x;
 
-    auto SegmentLess = [&x](const Segment<T, D> & lhs,  const Segment<T, D> & rhs) {
+    auto SegmentLess = [&x](const Segment<T> & lhs,  const Segment<T> & rhs) {
         return lhs.segmCompare(rhs, x);
     };
-    std::set<Segment<T, D>, decltype(SegmentLess)> currentSegments(SegmentLess);
+    std::set<Segment<T>, decltype(SegmentLess)> currentSegments(SegmentLess);
 
-    std::vector<typename std::set<Segment<T, D>>::iterator> set_it(segments.size());
+    std::vector<typename std::set<Segment<T>>::iterator> set_it(segments.size());
 
     for (const auto & event : events) {
         x = event.x;
@@ -169,17 +168,16 @@ firstIntersections(const std::vector<Segment<T, D>> & segments) {
 
 int main() {
     using T = int64_t;
-    using D = double;
 
     size_t N;
     std::cin >> N;
 
-    std::vector<Segment<T,D>> segments;
+    std::vector<Segment<T>> segments;
     segments.reserve(N);
 
     for (size_t i = 0; i < N; ++i) {
-        const auto & p = readPoint<T>(std::cin);
-        const auto & q = readPoint<T>(std::cin);
+        Point<T> p{}, q{};
+        std::cin >> p >> q;
 
         auto res = std::minmax(p, q, xLess_yGreater<T>());
 
