@@ -21,8 +21,8 @@
 int main() {
     using T = int64_t ;
 
-    auto A = readPoint<T>(std::cin);
-    auto B = readPoint<T>(std::cin);
+    Point<T> A{}, B{};
+    std::cin >> A >> B;
 
     size_t N;
     std::cin >> N;
@@ -30,8 +30,8 @@ int main() {
     size_t result = 0;
 
     for(size_t i = 0; i < N; ++i) {
-        auto river_begin = readPoint<T>(std::cin);
-        auto river_end = readPoint<T>(std::cin);
+        Point<T> river_begin{}, river_end{};
+        std::cin >> river_begin >> river_end;
 
         result += intersects(A, B, river_begin, river_end);
     }
