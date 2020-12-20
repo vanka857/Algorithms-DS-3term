@@ -28,78 +28,78 @@
 template<typename T>
 void printVector(const std::vector<T> & data, std::ostream & out) {
     for (const auto & i : data) {
-        out << i.toString() << std::endl;
+        out << i << std::endl;
     }
 }
 
 int main() {
     using T = long double;
 
-    std::vector<Vertex<T>> vertices3D;
+    std::vector<Point3DChan<T>> points_Chan;
 
     size_t id = 0;
 
-    T x, y, z;
+    T x, y;
     while (std::cin && std::cin >> x && std::cin >> y) {
 
-        Vertex<T> p(x, y, x*x + y*y, id);
+        Point3DChan<T> p(x, y, x*x + y*y, id);
 
-        vertices3D.emplace_back(p);
+        points_Chan.emplace_back(p);
         id++;
     }
 
     // add to infinite points
-    Vertex<T> p1(INF_F, -INF_F+100, 2 * INF_F * INF_F, -1);
-    Vertex<T> p2(-INF_F, INF_F-100, 2 * INF_F * INF_F, -2);
+    Point3DChan<T> p1(INF_F, -INF_F+100, 2 * INF_F * INF_F, -1);
+    Point3DChan<T> p2(-INF_F, INF_F-100, 2 * INF_F * INF_F, -2);
 
-    vertices3D.push_back(p1);
-    vertices3D.push_back(p2);
+    points_Chan.push_back(p1);
+    points_Chan.push_back(p2);
 
     // build lower convex hull using Chan algo
-    ConvexHull3DClass<T> cch3(vertices3D);
-    auto lowerHull3D = cch3.lowerHull(ConvexHull3DClass<T>::xLess_zGreater);
+    ConvexHull3D<T> cch3(points_Chan);
+    auto lower_hull_3D = cch3.partialHull(ConvexHull3D<T>::LOWER_HULL, ConvexHull3D<T>::xLess_zGreater);
 
     // если нет ограниченных многоугольнков
-    if (lowerHull3D.empty()) {
+    if (lower_hull_3D.empty()) {
         std::cout << 0;
         return 0;
     }
 
-    std::set<int> fakePoints;
+    std::set<int> fake_points;
 
-    for (const auto & plane : lowerHull3D) {
+    for (const auto & plane : lower_hull_3D) {
         if ((plane.vertices[0].id < 0) ||
             (plane.vertices[1].id < 0) ||
             (plane.vertices[2].id < 0)) {
 
-            fakePoints.insert(plane.vertices[0].id);
-            fakePoints.insert(plane.vertices[1].id);
-            fakePoints.insert(plane.vertices[2].id);
+            fake_points.insert(plane.vertices[0].id);
+            fake_points.insert(plane.vertices[1].id);
+            fake_points.insert(plane.vertices[2].id);
         }
     }
 
-    size_t edgesCount = 0;
+    size_t edges_count = 0;
 
-    auto isFake = [&fakePoints](int64_t index){
-        return (fakePoints.count(index) == 1);
+    auto is_fake = [&fake_points](int64_t index){
+        return (fake_points.count(index) == 1);
     };
 
-    for (const auto &plane : lowerHull3D) {
-        if (!isFake(plane.vertices[0].id))
-            ++edgesCount;
+    for (const auto &plane : lower_hull_3D) {
+        if (!is_fake(plane.vertices[0].id))
+            ++edges_count;
 
-        if (!isFake(plane.vertices[1].id))
-            ++edgesCount;
+        if (!is_fake(plane.vertices[1].id))
+            ++edges_count;
 
-        if (!isFake(plane.vertices[2].id))
-            ++edgesCount;
+        if (!is_fake(plane.vertices[2].id))
+            ++edges_count;
     }
 
-    size_t pointsCount = vertices3D.size() - fakePoints.size();
-    if (pointsCount == 0) {
+    size_t points_count = points_Chan.size() - fake_points.size();
+    if (points_count == 0) {
         std::cout << 0;
     } else {
-        std::cout << std::setprecision(7) << static_cast<long double>(edgesCount) / pointsCount;
+        std::cout << std::setprecision(7) << static_cast<long double>(edges_count) / points_count;
     }
 
 }
