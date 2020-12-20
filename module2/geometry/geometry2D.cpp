@@ -36,9 +36,10 @@ public:
     Point & operator-=(const Point & rhs);
     Point operator-() const;
 
-    [[nodiscard]] std::string toString() const;
-
     [[nodiscard]] double len() const;
+
+    template <typename T1> friend std::istream& operator>> (std::istream& in, Point<T>& point);
+    template <typename T1> friend std::ostream& operator<< (std::ostream& out, const Point<T>& point);
 };
 template<typename T>
 struct xLess_yGreater{
@@ -86,9 +87,17 @@ double Point<T>::len() const {
 }
 
 template<typename T>
-std::string Point<T>::toString() const {
-    return "x:" + std::to_string(this->x) + " y:" + std::to_string(this->y);
+std::istream & operator>>(std::istream & in, Point<T>& point) {
+    in >> point.x >> point.y;
+    return in;
 }
+
+template<typename T>
+std::ostream & operator<<(std::ostream & out, const Point<T> & point) {
+    out << point.x << point.y;
+    return out;
+}
+
 template<typename T>
 Point<T> operator+(Point<T> lhs, const Point<T> & rhs) {
     lhs += rhs;
@@ -219,25 +228,20 @@ inline T dotProduct(const Vector<T> & v1, const Vector<T> & v2) {
 }
 
 template<typename T>
-Point<T> readPoint(std::istream & in) {
-    T x, y;
-    in >> x >> y;
-    return {x, y};
-}
-
+class Polygon;
 
 template<typename Container, typename T>
-class ConvexHullClass {
+class ConvexHull {
 public:
     typename Container::iterator begin, end;
 
-    explicit ConvexHullClass(typename Container::iterator begin, typename Container::iterator end) :
+    explicit ConvexHull(typename Container::iterator begin, typename Container::iterator end) :
             begin(begin), end(end) {
         // TODO check iterator tag >= bidirectional
 
         std::sort(begin, end, xLess_yGreater<T>());
     }
-    std::vector<Point<T>> createConvexHull();
+    Polygon<T> createConvexHull();
 
 private:
     // TODO return Polygon instead of vector<Point>
@@ -246,7 +250,7 @@ private:
 };
 
 template<typename Container, typename T>
-std::vector<Point<T>> ConvexHullClass<Container, T>::createConvexHull() {
+Polygon<T> ConvexHull<Container, T>::createConvexHull() {
     std::vector<Point<T>> top = createConvexHullOfSorted<typename Container::reverse_iterator>(
             std::make_reverse_iterator(end), std::make_reverse_iterator(begin));
     top.pop_back();
@@ -256,12 +260,17 @@ std::vector<Point<T>> ConvexHullClass<Container, T>::createConvexHull() {
 
     std::move(bottom.begin(), bottom.end(), std::back_inserter(top));
 
-    return top;
+    if(std::is_same_v<Container, std::vector<Point<T>>>) {
+        return Polygon<T>(top);
+    }
+    else {
+        // construct vector and return;
+    }
 }
 
 template<typename Container, typename T>
 template<typename Iterator>
-std::vector<Point<T>> ConvexHullClass<Container, T>::createConvexHullOfSorted(Iterator begin_, Iterator end_) {
+std::vector<Point<T>> ConvexHull<Container, T>::createConvexHullOfSorted(Iterator begin_, Iterator end_) {
     std::vector<Point<T>> result;
     result.reserve(end_ - begin_);
 
@@ -301,7 +310,7 @@ public:
 
 template <typename T>
 class Polygon : public Shape<T> {
-protected:
+private:
     std::vector<Point<T>> vertices;
     Polygon() = default;
     void setVertices(const std::vector<Point<T>> & vertices);
