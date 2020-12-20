@@ -13,16 +13,12 @@ class Point3D {
 public:
     T x, y, z;
 
-    int id;
+    int id = -1;
 
+    Point3D() = default;
     Point3D(const T & x, const T & y, const T & z, int id) : x(x), y(y), z(z), id(id) {}
 
-    [[nodiscard]] std::string toString() const {
-        std::string s = std::to_string(x);
-        return s + " " + std::to_string(y) + " " + std::to_string(z);
-    }
-
-    void rotate(T angle) {
+    void rotate(long double angle) {
         T new_z = z * cosl(angle) + y * sinl(angle);
         T new_y = -z * sinl(angle) + y * cosl(angle);
         z = new_z;
@@ -38,20 +34,33 @@ public:
         x = new_x;
         y = new_y;
     }
+
+    template <typename T1> friend std::istream& operator>> (std::istream& in, Point3D<T>& point);
+    template <typename T1> friend std::ostream& operator>> (std::ostream& out, Point3D<T>& point);
 };
 
 template<typename T>
-class Vertex : public Point3D<T> {
-public:
-    Vertex<T> * prev = nullptr;
-    Vertex<T> * next = nullptr;
+std::istream & operator>>(std::istream & in, Point3D<T>& point) {
+    in >> point.x >> point.y >> point.z;
+    return in;
+}
 
-    Vertex(const T & x, const T & y, const T & z, int id) : Point3D<T>(x, y, z, id) {}
+template<typename T>
+std::ostream & operator>>(std::ostream & out, Point3D<T>& point) {
+    out << point.x << point.y << point.z;
+    return out;
+}
+
+// Этот класс содержит методы, нужные для алгоритма Чана
+template<typename T>
+class Point3DChan : public Point3D<T> {
+public:
+    Point3DChan<T> * prev = nullptr;
+    Point3DChan<T> * next = nullptr;
+
+    Point3DChan(const T & x, const T & y, const T & z, int id) : Point3D<T>(x, y, z, id) {}
 
     bool updateLinks() {
-//        if (!prev)
-//            return true;
-
         if (prev->next == this) {
             prev->next = next;
             next->prev = prev;
@@ -68,37 +77,34 @@ public:
 };
 
 template<typename T>
-Point3D<T> readPoint3D(std::istream & in, int id) {
-    T x, y, z;
-    in >> x >> y >> z;
-    return {x, y, z, id};
-}
-
-template<typename T>
 struct Face {
-    std::vector<Vertex<T>> vertices;
+    std::vector<Point3DChan<T>> vertices;
 
     Face() = default;
-    explicit Face(const std::vector<Vertex<T> > & points) : vertices(points) {}
-    Face(Vertex<T> v1, Vertex<T> v2, Vertex<T> v3) {
+    explicit Face(const std::vector<Point3DChan<T> > & points) : vertices(points) {}
+    Face(Point3DChan<T> v1, Point3DChan<T> v2, Point3DChan<T> v3) {
         vertices.emplace_back(v1);
         vertices.emplace_back(v2);
         vertices.emplace_back(v3);
     }
 
-    [[nodiscard]] std::string toString() const;
-
     void getLessOrder();
+
+    template<typename T1> friend std::ostream& operator<< (std::ostream& out, const Face<T>& face);
 };
 
 template<typename T>
-std::string Face<T>::toString() const {
-    std::string s = "3";
-    return s + " " + std::to_string(vertices[0].id) + " " + std::to_string(vertices[1].id) + " " + std::to_string(vertices[2].id);
+std::ostream& operator<< (std::ostream& out, const Face<T>& face) {
+    out << face.vertices.size();
+    for (const auto & vertex : face.vertices) {
+        out << " " << vertex.id;
+    }
+    return out;
 }
 
 template<typename T>
 void Face<T>::getLessOrder() {
+    // вращение грани, чтобы первой точкой была наименьшая по номеру (сохраняется относительный порядок точек в грани)
     if (vertices[1].id < vertices[0].id  && vertices[1].id < vertices[2].id) {
         std::swap(vertices[0], vertices[1]);
         std::swap(vertices[1], vertices[2]);
@@ -109,24 +115,29 @@ void Face<T>::getLessOrder() {
 }
 
 template<typename T>
-class ConvexHull3DClass {
+class ConvexHull3D {
 private:
-    std::vector<Vertex<T> > points;
+    std::vector<Point3DChan<T> > points;
 
 public:
+    enum {
+        LOWER_HULL = 0,
+        UPPER_HULL = 1,
+    };
+
     static bool xLess_zGreater(Point3D<T> lhs, Point3D<T> rhs) {
-        return lhs.x < rhs.x || (lhs.x == rhs.x && lhs.z > rhs.z);
+        return lhs.x < rhs.x || (is_equal(lhs.x, rhs.x) && lhs.z > rhs.z);
     }
 
     static bool zLess_xGreater(Point3D<T> lhs, Point3D<T> rhs) {
-        return lhs.z < rhs.z || (lhs.z == rhs.z && lhs.x > rhs.x);
+        return lhs.z < rhs.z || (is_equal(lhs.x, rhs.x) && lhs.x > rhs.x);
     }
 
-    explicit ConvexHull3DClass(const std::vector<Vertex<T> > & points) : points(points) {}
+    explicit ConvexHull3D(const std::vector<Point3DChan<T> > & points) : points(points) {}
     std::vector<Face<T>> hull() const; // return ConvexHull as faces
 
-    std::vector<Face<T>> lowerHull(std::function<bool (Vertex<T>, Vertex<T>)> less = xLess_zGreater) const; // return Lower ConvexHull as faces
-    std::vector<Face<T>> upperHull(std::function<bool (Vertex<T>, Vertex<T>)> less = xLess_zGreater) const; // return Upper ConvexHull as faces
+    // return partial (lower or upper) ConvexHull as faces
+    std::vector<Face<T>> partialHull(bool hull = LOWER_HULL, std::function<bool (Point3DChan<T>, Point3DChan<T>)> less = xLess_zGreater) const;
 
 private:
 
@@ -139,13 +150,13 @@ private:
         RIGHT_BRIDGE_NEXT,
     };
 
-    void sortPoints(std::vector<Vertex<T>> & source, std::function<bool (Vertex<T>, Vertex<T>)> less) const;
-    static std::vector<Vertex<T> > reflected(typename std::vector<Vertex<T>>::iterator begin, typename std::vector<Vertex<T>>::iterator end) {
-        std::vector<Vertex<T> > result;
+    void sortPoints(std::vector<Point3DChan<T>> & source, std::function<bool (Point3DChan<T>, Point3DChan<T>)> less) const;
+    static std::vector<Point3DChan<T> > reflected(typename std::vector<Point3DChan<T>>::iterator begin, typename std::vector<Point3DChan<T>>::iterator end) {
+        std::vector<Point3DChan<T> > result;
 
         for (auto it = begin; it < end; ++it) {
             auto pt = *it;
-            Vertex<T> v(pt.x, pt.y, - pt.z, pt.id);
+            Point3DChan<T> v(pt.x, pt.y, - pt.z, pt.id);
             v.prev = nullptr;
             v.next = nullptr;
             result.push_back(v);
@@ -154,21 +165,21 @@ private:
         return result;
     }
 
-    static std::vector<Vertex<T> *> hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size_t to) ; // return ConvexHull of part [begin, end) as ordered vector of ptr to points
-    static std::vector<Vertex<T> *> merge(const std::vector<Vertex<T> *> & left, const std::vector<Vertex<T> *> & right, Vertex<T> * left_br, Vertex<T> * right_br); // merge two ConvexHulls
+    static std::vector<Point3DChan<T> *> hull_raw(std::vector<Point3DChan<T> *> & pts, size_t from, size_t to) ; // return ConvexHull of part [begin, end) as ordered vector of ptr to points
+    static std::vector<Point3DChan<T> *> merge(const std::vector<Point3DChan<T> *> & left, const std::vector<Point3DChan<T> *> & right, Point3DChan<T> * left_br, Point3DChan<T> * right_br); // merge two ConvexHulls
 
-    static void buildBridges(std::vector<Vertex<T> *> & data, Vertex<T>* & left_br, Vertex<T>* & right_br, T x);
-    static std::pair<Vertex<T> *, Vertex<T> *> findBridge(Vertex<T> * left_br, Vertex<T> * right_br);
+    static void buildBridges(std::vector<Point3DChan<T> *> & data, Point3DChan<T>* & left_br, Point3DChan<T>* & right_br, T x);
+    static std::pair<Point3DChan<T> *, Point3DChan<T> *> findBridge(Point3DChan<T> * left_br, Point3DChan<T> * right_br);
 
-    static T turnTime(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c);
-    static bool isRightTurn(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c);
+    static T turnTime(Point3DChan<T> * a, Point3DChan<T> * b, Point3DChan<T> * c);
+    static bool isRightTurn(Point3DChan<T> * a, Point3DChan<T> * b, Point3DChan<T> * c);
 
-    static void pushFaces(std::vector<Face<T>> & faces, const std::vector<Vertex<T> *> & points, bool reflected=false);
-    static std::vector<Vertex<T> *> links(const std::vector<Vertex<T>> & points);
+    static void pushFaces(std::vector<Face<T>> & faces, const std::vector<Point3DChan<T> *> & points, bool reflected = false);
+    static std::vector<Point3DChan<T> *> createReferences(std::vector<Point3DChan<T>> & points);
 };
 
 template <typename T>
-void ConvexHull3DClass<T>::pushFaces(std::vector<Face<T>> & faces, const std::vector<Vertex<T> *> & points, bool reflected) {
+void ConvexHull3D<T>::pushFaces(std::vector<Face<T>> & faces, const std::vector<Point3DChan<T> *> & points, bool reflected) {
     // Эта функция возвращает грани в виде трех точек,
     // отсортированных по часовой стрелке относительно внешней нормали.
 
@@ -191,54 +202,39 @@ void ConvexHull3DClass<T>::pushFaces(std::vector<Face<T>> & faces, const std::ve
 }
 
 template <typename T>
-std::vector<Vertex<T> *> ConvexHull3DClass<T>::links(const std::vector<Vertex<T>> & points) {
-    std::vector<Vertex<T> *> result;
+std::vector<Point3DChan<T> *> ConvexHull3D<T>::createReferences(std::vector<Point3DChan<T>> & points) {
+    std::vector<Point3DChan<T> *> result;
 
-    // TODO fix memory leak
     for (auto & p : points) {
-        auto ptr = new Vertex<T>(p);
-        result.push_back(ptr);
+        result.push_back(&p);
     }
 
     return result;
 }
 
 template<typename T>
-std::vector<Face<T>> ConvexHull3DClass<T>::lowerHull(std::function<bool (Vertex<T>, Vertex<T>)> less) const {
+std::vector<Face<T>> ConvexHull3D<T>::partialHull(bool hull, std::function<bool (Point3DChan<T>, Point3DChan<T>)> less) const {
     std::vector<Face<T>> result;
 
     auto sorted = points;
     sortPoints(sorted, less);
 
-    auto sorted_links = links(sorted);
-    auto lch = hull_raw(sorted_links, 0, sorted_links.size());
-    // add faces from lch (lower convex hull)
-    pushFaces(result, lch, false);
+    if (hull == UPPER_HULL) {
+        sorted = reflected(sorted.begin(), sorted.end());
+    }
+
+    auto sorted_references = createReferences(sorted);
+    auto ch = hull_raw(sorted_references, 0, sorted_references.size());
+
+    pushFaces(result, ch, (hull == UPPER_HULL));
 
     return result;
 }
 
 template<typename T>
-std::vector<Face<T>> ConvexHull3DClass<T>::upperHull(std::function<bool (Vertex<T>, Vertex<T>)> less) const {
-    std::vector<Face<T>> result;
-
-    auto sorted = points;
-    sortPoints(sorted, less);
-
-    auto points_reflected = reflected(sorted.begin(), sorted.end());
-
-    auto reflected_links = links(points_reflected);
-    auto uch = hull_raw(reflected_links, 0, reflected_links.size());
-    // add faces from uch (upper convex hull)
-    pushFaces(result, uch, true);
-
-    return result;
-}
-
-template<typename T>
-std::vector<Face<T>> ConvexHull3DClass<T>::hull() const {
-    auto lch = lowerHull();
-    auto uch = upperHull();
+std::vector<Face<T>> ConvexHull3D<T>::hull() const {
+    auto lch = partialHull(LOWER_HULL);
+    auto uch = partialHull(UPPER_HULL);
 
     std::move(uch.begin(), uch.end(), std::back_inserter(lch));
 
@@ -247,16 +243,16 @@ std::vector<Face<T>> ConvexHull3DClass<T>::hull() const {
 
 
 template<typename T>
-void ConvexHull3DClass<T>::sortPoints(std::vector<Vertex<T>> & source, std::function<bool (Vertex<T>, Vertex<T>)> less) const {
+void ConvexHull3D<T>::sortPoints(std::vector<Point3DChan<T>> & source, std::function<bool (Point3DChan<T>, Point3DChan<T>)> less) const {
     std::sort(source.begin(), source.end(), less);
 }
 
 template<typename T>
-std::vector<Vertex<T> *>
-ConvexHull3DClass<T>::hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size_t to) {
+std::vector<Point3DChan<T> *>
+ConvexHull3D<T>::hull_raw(std::vector<Point3DChan<T> *> & pts, size_t from, size_t to) {
 
     if (from + 1 == to) { // n == 1
-        std::vector<Vertex<T> *> result;
+        std::vector<Point3DChan<T> *> result;
         result.push_back(pts[from]);
         return result;
     }
@@ -270,7 +266,7 @@ ConvexHull3DClass<T>::hull_raw(std::vector<Vertex<T> *> & pts, size_t from, size
 }
 
 template <typename T>
-T ConvexHull3DClass<T>::turnTime(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c) {
+T ConvexHull3D<T>::turnTime(Point3DChan<T> * a, Point3DChan<T> * b, Point3DChan<T> * c) {
     if (a == nullptr || b == nullptr || c == nullptr) {
         return INF_LD;
     }
@@ -285,7 +281,7 @@ T ConvexHull3DClass<T>::turnTime(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c) {
 }
 
 template <typename T>
-bool ConvexHull3DClass<T>::isRightTurn(Vertex<T> * a, Vertex<T> * b, Vertex<T> * c) {
+bool ConvexHull3D<T>::isRightTurn(Point3DChan<T> * a, Point3DChan<T> * b, Point3DChan<T> * c) {
     if (a == nullptr || b == nullptr || c == nullptr) {
         return false;
     }
@@ -297,9 +293,9 @@ bool ConvexHull3DClass<T>::isRightTurn(Vertex<T> * a, Vertex<T> * b, Vertex<T> *
 }
 
 template<typename T>
-std::pair<Vertex<T> *, Vertex<T> *>
-ConvexHull3DClass<T>::findBridge(Vertex<T> * left_br,
-                                 Vertex<T> * right_br) {
+std::pair<Point3DChan<T> *, Point3DChan<T> *>
+ConvexHull3D<T>::findBridge(Point3DChan<T> * left_br,
+                            Point3DChan<T> * right_br) {
 
     while (true) {
         if (isRightTurn(left_br, right_br, right_br->next)) {
@@ -315,18 +311,17 @@ ConvexHull3DClass<T>::findBridge(Vertex<T> * left_br,
 }
 
 template<typename T>
-std::vector<Vertex<T> *>
-ConvexHull3DClass<T>::merge(const std::vector<Vertex<T> *> & left,
-                            const std::vector<Vertex<T> *> & right,
-                            Vertex<T> * left_br_, Vertex<T> * right_br_) {
+std::vector<Point3DChan<T> *>
+ConvexHull3D<T>::merge(const std::vector<Point3DChan<T> *> & left,
+                       const std::vector<Point3DChan<T> *> & right,
+                       Point3DChan<T> * left_br_, Point3DChan<T> * right_br_) {
 
-    std::vector<Vertex<T> *> result;
+    std::vector<Point3DChan<T> *> result;
 
     auto x = left_br_->x;
     auto bridge = findBridge(left_br_, right_br_);
 
-    auto * left_br = bridge.first;
-    auto * right_br = bridge.second;
+    auto [left_br, right_br] = bridge;
 
     T time = -INF_LD;
 
@@ -340,8 +335,8 @@ ConvexHull3DClass<T>::merge(const std::vector<Vertex<T> *> & left,
         T temp;
         EventType event;
 
-        Vertex<T> * l;
-        Vertex<T> * r;
+        Point3DChan<T> * l;
+        Point3DChan<T> * r;
 
         if (l_it != left.end() && (l = *l_it, temp = turnTime(l->prev, l, l->next), time <= temp && temp < min_time)) {
             min_time = temp;
@@ -411,15 +406,14 @@ ConvexHull3DClass<T>::merge(const std::vector<Vertex<T> *> & left,
 }
 
 template <typename T>
-void ConvexHull3DClass<T>::buildBridges(std::vector<Vertex<T> *> & data,
-                                        Vertex<T> *& left_br, Vertex<T> *& right_br, T x) {
+void ConvexHull3D<T>::buildBridges(std::vector<Point3DChan<T> *> & data,
+                                   Point3DChan<T> *& left_br, Point3DChan<T> *& right_br, T x) {
 
     left_br->next = right_br;
     right_br->prev = left_br;
 
     for (auto cur = data.rbegin(); cur != data.rend(); ++cur) {
-        // TODO may be cur_point = *cur is same
-        auto cur_point = &*(*cur);
+        auto cur_point = *cur;
 
         if (left_br->x < cur_point->x && cur_point->x < right_br->x) {
             left_br->next = cur_point;
